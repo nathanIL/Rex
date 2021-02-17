@@ -6,15 +6,19 @@
 
 package Rex::Interface::Fs::Sudo;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 require Rex::Commands;
 use Rex::Interface::Fs::Base;
 use Rex::Helper::Path;
 use Rex::Helper::Encode;
-use JSON::XS;
+use JSON::MaybeXS;
 use base qw(Rex::Interface::Fs::Base);
+use Data::Dumper;
 
 sub new {
   my $that  = shift;
@@ -31,7 +35,12 @@ sub ls {
 
   my @ret;
 
-  my @out = split( /\n/, $self->_exec("ls -a1 $path") );
+  my @out = split(
+    /\n/,
+    $self->_exec(
+      "ls -a1 $path", undef, { env => { QUOTING_STYLE => "literal" } }
+    )
+  );
 
   # failed open directory, return undef
   if ( $? != 0 ) { return; }
@@ -69,13 +78,18 @@ sub download {
 
   if ( my $ssh = Rex::is_ssh() ) {
     $self->_exec("cp '$source' $rnd_file");
+    $self->chmod( 444, $rnd_file );
     if ( ref $ssh eq "Net::OpenSSH" ) {
       $ssh->sftp->get( $rnd_file, $target );
     }
     else {
       $ssh->scp_get( $rnd_file, $target );
     }
-    $self->unlink($rnd_file);
+    Rex::get_current_connection_object()->run_sudo_unmodified(
+      sub {
+        $self->unlink($rnd_file);
+      }
+    );
   }
   else {
     $self->cp( $source, $target );
@@ -86,19 +100,26 @@ sub download {
 sub is_dir {
   my ( $self, $path ) = @_;
 
-  $self->_exec("/bin/sh -c '[ -d \"$path\" ]'");
+  ($path) = $self->_normalize_path($path);
+
+  $self->_exec("test -d $path");
   my $ret = $?;
 
-  if ( $ret == 0 ) { return 1; }
+  $ret == 0 ? return 1 : return undef;
 }
 
 sub is_file {
   my ( $self, $file ) = @_;
 
-  $self->_exec("/bin/sh -c '[ -e \"$file\" ]'");
-  my $ret = $?;
+  ($file) = $self->_normalize_path($file);
 
-  if ( $ret == 0 ) { return 1; }
+  $self->_exec("test -e $file");
+  my $is_file = $?;
+
+  $self->_exec("test -d $file");
+  my $is_dir = $?;
+
+  ( $is_file == 0 && $is_dir != 0 ) ? return 1 : return undef;
 }
 
 sub unlink {
@@ -111,7 +132,8 @@ sub unlink {
 
 sub mkdir {
   my ( $self, $dir ) = @_;
-  $self->_exec("mkdir '$dir' >/dev/null 2>&1");
+  ($dir) = $self->_normalize_path($dir);
+  $self->_exec("mkdir $dir >/dev/null 2>&1");
   if ( $? == 0 ) { return 1; }
 }
 
@@ -141,42 +163,57 @@ sub stat {
   $script .= func_to_json();
 
   my $rnd_file = $self->_write_to_rnd_file($script);
-  my $out      = $self->_exec("perl $rnd_file '$file'");
-  my $tmp      = decode_json($out);
+  ($file) = $self->_normalize_path($file);
+  my $out = $self->_exec("perl $rnd_file $file");
+
+  Rex::get_current_connection_object()->run_sudo_unmodified(
+    sub {
+      $self->unlink($rnd_file);
+    }
+  );
+
+  if ( !$out ) {
+    return undef;
+  }
+
+  my $tmp = decode_json($out);
 
   return %{$tmp};
 }
 
 sub is_readable {
   my ( $self, $file ) = @_;
-  my $script = q|unlink $0; if(-r $ARGV[0]) { exit 0; } exit 1; |;
 
-  my $rnd_file = $self->_write_to_rnd_file($script);
-  $self->_exec("perl $rnd_file '$file'");
-  my $ret = $?;
+  ($file) = $self->_normalize_path($file);
+  $self->_exec("test -r $file");
 
-  if ( $ret == 0 ) { return 1; }
+  if ( $? == 0 ) { return 1; }
 }
 
 sub is_writable {
   my ( $self, $file ) = @_;
 
-  my $script = q|unlink $0; if(-w $ARGV[0]) { exit 0; } exit 1; |;
+  ($file) = $self->_normalize_path($file);
+  $self->_exec("test -w $file");
 
-  my $rnd_file = $self->_write_to_rnd_file($script);
-  $self->_exec("perl $rnd_file '$file'");
-  my $ret = $?;
-
-  if ( $ret == 0 ) { return 1; }
+  if ( $? == 0 ) { return 1; }
 }
 
 sub readlink {
   my ( $self, $file ) = @_;
   my $script = q|unlink $0; print readlink($ARGV[0]) . "\n"; |;
+  ($file) = $self->_normalize_path($file);
 
   my $rnd_file = $self->_write_to_rnd_file($script);
-  my $out      = $self->_exec("perl $rnd_file '$file'");
+  my $out      = $self->_exec("perl $rnd_file $file");
+  my $ret      = $?;
   chomp $out;
+  Rex::get_current_connection_object()->run_sudo_unmodified(
+    sub {
+      $self->unlink($rnd_file);
+    }
+  );
+  $? = $ret;
 
   return $out;
 }
@@ -203,7 +240,15 @@ sub glob {
 
   my $rnd_file = $self->_write_to_rnd_file($script);
   my $content  = $self->_exec("perl $rnd_file");
-  my $tmp      = decode_json($content);
+  my $ret      = $?;
+  Rex::get_current_connection_object()->run_sudo_unmodified(
+    sub {
+      $self->unlink($rnd_file);
+    }
+  );
+  $? = $ret;
+
+  my $tmp = decode_json($content);
 
   return @{$tmp};
 }
@@ -240,9 +285,9 @@ sub _write_to_rnd_file {
 }
 
 sub _exec {
-  my ( $self, $cmd ) = @_;
+  my ( $self, $cmd, $path, $option ) = @_;
   my $exec = Rex::Interface::Exec->create("Sudo");
-  return $exec->exec($cmd);
+  return $exec->exec( $cmd, $path, $option );
 }
 
 1;

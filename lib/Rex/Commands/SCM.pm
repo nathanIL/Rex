@@ -21,11 +21,11 @@ All these functions are not idempotent.
  use Rex::Commands::SCM;
  
  set repository => "myrepo",
-    url => "git@foo.bar:myrepo.git";
+    url => 'git@foo.bar:myrepo.git';
  
  set repository => "myrepo2",
-    url => "https://foo.bar/myrepo",
-    type => "subversion",
+    url      => "https://foo.bar/myrepo",
+    type     => "subversion",
     username => "myuser",
     password => "mypass";
  
@@ -36,8 +36,13 @@ All these functions are not idempotent.
      path => "webapp";
  
    checkout "myrepo",
-     path => "webapp",
+     path   => "webapp",
      branch => 1.6;    # branch only for git
+ 
+   # For Git only, will replay any local commits on top of pulled commits
+   checkout "myrepo",
+     path   => "script_dir",
+     rebase => TRUE;
  
    checkout "myrepo2";
  };
@@ -45,14 +50,15 @@ All these functions are not idempotent.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::SCM;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Config;
@@ -69,7 +75,7 @@ Rex::Config->register_set_handler(
   }
 );
 
-=item checkout($name, %data);
+=head2 checkout($name, %data);
 
 With this function you can checkout a repository defined with I<set repository>. See Synopsis.
 
@@ -78,7 +84,7 @@ With this function you can checkout a repository defined with I<set repository>.
 sub checkout {
   my ( $name, %data ) = @_;
 
-  my $type = $REPOS{"$name"}->{"type"} ? $REPOS{$name}->{"type"} : "git";
+  my $type  = $REPOS{"$name"}->{"type"} ? $REPOS{$name}->{"type"} : "git";
   my $class = "Rex::SCM::\u$type";
 
   my $co_to = exists $data{"path"} ? $data{"path"} : "";
@@ -100,9 +106,5 @@ sub checkout {
   Rex::Logger::debug("Checking out $repo -> $co_to");
   $scm->checkout( $REPOS{$name}, $co_to, \%data );
 }
-
-=back
-
-=cut
 
 1;

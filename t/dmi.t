@@ -1,12 +1,11 @@
-use Test::More tests => 29;
-use Data::Dumper;
+use Test::More tests => 31;
 
-use_ok 'Rex::Inventory::DMIDecode';
+use Rex::Inventory::DMIDecode;
 
 my @lines = eval { local (@ARGV) = ("t/dmi.linux.out"); <>; };
-my $dmi = Rex::Inventory::DMIDecode->new( lines => \@lines );
+my $dmi   = Rex::Inventory::DMIDecode->new( lines => \@lines );
 
-ok( ref($dmi) eq "Rex::Inventory::DMIDecode", "dmi object" );
+isa_ok( $dmi, "Rex::Inventory::DMIDecode", "dmi object" );
 
 my $bb      = $dmi->get_base_board;
 my $bios    = $dmi->get_bios;
@@ -15,12 +14,28 @@ my @mems    = $dmi->get_memory_modules;
 my @mema    = $dmi->get_memory_arrays;
 my $sysinfo = $dmi->get_system_information;
 
-ok( $bb->get_product_name() eq "Parallels Virtual Platform",
-  "get base board product name" );
-ok( $bios->get_vendor eq "Parallels Software International Inc.",
-  "get bios vendor" );
-ok( $bios->get_version =~ /\d\.0\./, "get bios version" );
-ok( $bios->get_release_date eq "10/26/2007" );
+is_deeply(
+  $bb->get_all,
+  {
+    manufacturer  => "Parallels Software International Inc.",
+    product_name  => "Parallels Virtual Platform",
+    serial_number => "None",
+    version       => "None",
+  }
+);
+
+is(
+  $bb->get_product_name,
+  "Parallels Virtual Platform",
+  "get base board product name"
+);
+is(
+  $bios->get_vendor,
+  "Parallels Software International Inc.",
+  "get bios vendor"
+);
+like( $bios->get_version, qr/\d\.0\./, "get bios version" );
+is( $bios->get_release_date, "10/26/2007" );
 
 ok(
   $cpus[0]->get_max_speed eq "2800 MHz"
@@ -38,10 +53,16 @@ ok(
   "memory array max capacity"
 );
 
-ok( $sysinfo->get_manufacturer eq "Parallels Software International Inc.",
-  "system information manucafturer" );
-ok( $sysinfo->get_product_name eq "Parallels Virtual Platform",
-  "system information product name" );
+is(
+  $sysinfo->get_manufacturer,
+  "Parallels Software International Inc.",
+  "system information manucafturer"
+);
+is(
+  $sysinfo->get_product_name,
+  "Parallels Virtual Platform",
+  "system information product name"
+);
 
 @lines   = undef;
 $dmi     = undef;
@@ -53,7 +74,9 @@ $bios    = undef;
 $sysinfo = undef;
 
 @lines = eval { local (@ARGV) = ("t/dmi.obsd.out"); <>; };
-$dmi = Rex::Inventory::DMIDecode->new( lines => \@lines );
+$dmi   = Rex::Inventory::DMIDecode->new( lines => \@lines );
+
+isa_ok( $dmi, "Rex::Inventory::DMIDecode", "dmi object (obsd)" );
 
 $bb      = $dmi->get_base_board;
 $bios    = $dmi->get_bios;
@@ -62,12 +85,18 @@ $bios    = $dmi->get_bios;
 @mema    = $dmi->get_memory_arrays;
 $sysinfo = $dmi->get_system_information;
 
-ok( $bb->get_product_name() eq "Parallels Virtual Platform",
-  "get base board product name" );
-ok( $bios->get_vendor eq "Parallels Software International Inc.",
-  "get bios vendor" );
-ok( $bios->get_version =~ /\d\.0\./, "get bios version" );
-ok( $bios->get_release_date eq "10/26/2007" );
+is(
+  $bb->get_product_name,
+  "Parallels Virtual Platform",
+  "get base board product name"
+);
+is(
+  $bios->get_vendor,
+  "Parallels Software International Inc.",
+  "get bios vendor"
+);
+like( $bios->get_version, qr/\d\.0\./, "get bios version" );
+is( $bios->get_release_date, "10/26/2007" );
 
 ok(
   $cpus[0]->get_max_speed eq "2800 MHz"
@@ -85,10 +114,16 @@ ok(
   "memory array max capacity"
 );
 
-ok( $sysinfo->get_manufacturer eq "Parallels Software International Inc.",
-  "system information manucafturer" );
-ok( $sysinfo->get_product_name eq "Parallels Virtual Platform",
-  "system information product name" );
+is(
+  $sysinfo->get_manufacturer,
+  "Parallels Software International Inc.",
+  "system information manucafturer"
+);
+is(
+  $sysinfo->get_product_name,
+  "Parallels Virtual Platform",
+  "system information product name"
+);
 
 @lines   = undef;
 $dmi     = undef;
@@ -100,7 +135,9 @@ $bios    = undef;
 $sysinfo = undef;
 
 @lines = eval { local (@ARGV) = ("t/dmi.fbsd.out"); <>; };
-$dmi = Rex::Inventory::DMIDecode->new( lines => \@lines );
+$dmi   = Rex::Inventory::DMIDecode->new( lines => \@lines );
+
+isa_ok( $dmi, "Rex::Inventory::DMIDecode", "dmi object (fbsd)" );
 
 $bb      = $dmi->get_base_board;
 $bios    = $dmi->get_bios;
@@ -109,12 +146,18 @@ $bios    = $dmi->get_bios;
 @mema    = $dmi->get_memory_arrays;
 $sysinfo = $dmi->get_system_information;
 
-ok( $bb->get_product_name() eq "Parallels Virtual Platform",
-  "get base board product name" );
-ok( $bios->get_vendor eq "Parallels Software International Inc.",
-  "get bios vendor" );
-ok( $bios->get_version =~ /\d\.0\./, "get bios version" );
-ok( $bios->get_release_date eq "10/26/2007" );
+is(
+  $bb->get_product_name,
+  "Parallels Virtual Platform",
+  "get base board product name"
+);
+is(
+  $bios->get_vendor,
+  "Parallels Software International Inc.",
+  "get bios vendor"
+);
+like( $bios->get_version, qr/\d\.0\./, "get bios version" );
+is( $bios->get_release_date, "10/26/2007" );
 
 ok(
   $cpus[0]->get_max_speed eq "2800 MHz"
@@ -132,8 +175,13 @@ ok(
   "memory array max capacity"
 );
 
-ok( $sysinfo->get_manufacturer eq "Parallels Software International Inc.",
-  "system information manucafturer" );
-ok( $sysinfo->get_product_name eq "Parallels Virtual Platform",
-  "system information product name" );
-
+is(
+  $sysinfo->get_manufacturer,
+  "Parallels Software International Inc.",
+  "system information manucafturer"
+);
+is(
+  $sysinfo->get_product_name,
+  "Parallels Virtual Platform",
+  "system information product name"
+);

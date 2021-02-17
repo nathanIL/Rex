@@ -73,22 +73,24 @@ And then you can use it the following way in your Rexfile.
 
 See also the Methods of Rex::Box::Base. This module inherits all methods of it.
 
-=over 4
-
 =cut
 
 package Rex::Box::Amazon;
 
+use 5.010001;
+use strict;
+use warnings;
 use Data::Dumper;
 use Rex::Box::Base;
 use Rex::Commands -no => [qw/auth/];
-use Rex::Commands::Run;
 use Rex::Commands::Fs;
 use Rex::Commands::Cloud;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 BEGIN {
   LWP::UserAgent->use;
-};
+}
 
 use Time::HiRes qw(tv_interval gettimeofday);
 use File::Basename qw(basename);
@@ -101,7 +103,7 @@ $|++;
 # BEGIN of class methods
 ################################################################################
 
-=item new(name => $vmname)
+=head2 new(name => $vmname)
 
 Constructor if used in OO mode.
 
@@ -152,8 +154,9 @@ sub import_vm {
       name           => $self->{name},
       key            => $self->{options}->{auth_key},
       zone           => $self->{options}->{zone},
-      type           => $self->{type} || "m1.large",
+      type           => $self->{type}           || "m1.large",
       security_group => $self->{security_group} || "default",
+      options        => $self->options,
     };
   }
 
@@ -165,7 +168,7 @@ sub import_vm {
   $self->{info} = $vminfo;
 }
 
-=item ami($ami_id)
+=head2 ami($ami_id)
 
 Set the AMI ID for the box.
 
@@ -176,7 +179,7 @@ sub ami {
   $self->{ami} = $ami;
 }
 
-=item type($type)
+=head2 type($type)
 
 Set the type of the Instance. For example "m1.large".
 
@@ -187,7 +190,7 @@ sub type {
   $self->{type} = $type;
 }
 
-=item security_group($sec_group)
+=head2 security_group($sec_group)
 
 Set the Amazon security group for this Instance.
 
@@ -198,22 +201,7 @@ sub security_group {
   $self->{security_group} = $sec_group;
 }
 
-sub provision_vm {
-  my ( $self, @tasks ) = @_;
-
-  if ( !@tasks ) {
-    @tasks = @{ $self->{__tasks} };
-  }
-
-  $self->wait_for_ssh();
-
-  for my $task (@tasks) {
-    Rex::TaskList->create()->get_task($task)->set_auth( %{ $self->{__auth} } );
-    Rex::TaskList->create()->get_task($task)->run( $self->ip );
-  }
-}
-
-=item forward_port(%option)
+=head2 forward_port(%option)
 
 Not available for Amazon Boxes.
 
@@ -221,7 +209,7 @@ Not available for Amazon Boxes.
 
 sub forward_port { Rex::Logger::debug("Not available for Amazon Boxes."); }
 
-=item share_folder(%option)
+=head2 share_folder(%option)
 
 Not available for Amazon Boxes.
 
@@ -233,12 +221,11 @@ sub list_boxes {
   my ($self) = @_;
 
   my @vms = cloud_instance_list;
-
   my @ret = grep {
          $_->{name}
       && $_->{state} ne "terminated"
       && $_->{state} ne "shutting-down"
-  } @vms;    # only vms with names...
+  } @vms; # only vms with names...
 
   return @ret;
 }
@@ -276,7 +263,17 @@ sub stop {
   cloud_instance stop => $self->{info}->{id};
 }
 
-=item info
+sub destroy {
+  my ($self) = @_;
+
+  Rex::Logger::info( "Destroying instance: " . $self->{name} );
+
+  $self->info;
+
+  cloud_instance terminate => $self->{info}->{id};
+}
+
+=head2 info
 
 Returns a hashRef of vm information.
 
@@ -296,9 +293,5 @@ sub ip {
 
   return $self->{info}->{ip};
 }
-
-=back
-
-=cut
 
 1;

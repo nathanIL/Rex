@@ -24,18 +24,19 @@ All these functions are not idempotent.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Process;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 require Rex::Exporter;
 use Data::Dumper;
-use Rex::Commands::Run;
+use Rex::Helper::Run;
 use Rex::Commands::Gather;
 
 use vars qw(@EXPORT);
@@ -45,9 +46,9 @@ use base qw(Rex::Exporter);
   ps
   nice);
 
-=item kill($pid, $sig)
+=head2 kill($pid, $sig)
 
-Will kill the given process id. If $sig is specified it will kill with this.
+Will kill the given process id. If $sig is specified it will kill with the given signal.
 
  task "kill", "server01", sub {
    kill 9931;
@@ -60,15 +61,15 @@ sub kill {
   my ( $process, $sig ) = @_;
   $sig ||= "";
 
-  run( "kill $sig " . $process );
+  i_run( "kill $sig " . $process, fail_ok => 1 );
   if ( $? != 0 ) {
     die("Error killing $process");
   }
 }
 
-=item killall($name, $sig)
+=head2 killall($name, $sig)
 
-Will kill the given process. If $sig is specified it will kill with this.
+Will kill the given process. If $sig is specified it will kill with the given signal.
 
  task "kill-apaches", "server01", sub {
    killall "apache2";
@@ -82,7 +83,7 @@ sub killall {
   $sig ||= "";
 
   if ( can_run("killall") ) {
-    run("killall $sig $process");
+    i_run( "killall $sig $process", fail_ok => 1 );
     if ( $? != 0 ) {
       die("Error killing $process");
     }
@@ -92,7 +93,7 @@ sub killall {
   }
 }
 
-=item ps
+=head2 ps
 
 List all processes on a system. Will return all fields of a I<ps aux>.
 
@@ -123,7 +124,7 @@ sub ps {
   if (is_openwrt) {
 
     # openwrt doesn't have ps aux
-    @list = run("ps");
+    @list = i_run( "ps", fail_ok => 1 );
 
     my @ret = ();
     for my $line (@list) {
@@ -147,18 +148,19 @@ sub ps {
 
   elsif ( operating_system_is("SunOS") && operating_system_version() <= 510 ) {
     if (@custom) {
-      @list = run( "/usr/ucb/ps awwx -o" . join( ",", @custom ) );
+      @list =
+        i_run( "/usr/ucb/ps awwx -o" . join( ",", @custom ), fail_ok => 1 );
     }
     else {
-      @list = run("/usr/ucb/ps auwwx");
+      @list = i_run( "/usr/ucb/ps auwwx", fail_ok => 1 );
     }
   }
   else {
     if (@custom) {
-      @list = run( "ps awwx -o" . join( ",", @custom ) );
+      @list = i_run( "ps awwx -o" . join( ",", @custom ), fail_ok => 1 );
     }
     else {
-      @list = run("ps auwwx");
+      @list = i_run( "ps auwwx", fail_ok => 1 );
     }
   }
 
@@ -223,7 +225,7 @@ sub ps {
 #  run "nohup $cmd &";
 #}
 
-=item nice($pid, $level)
+=head2 nice($pid, $level)
 
 Renice a process identified by $pid with the priority $level.
 
@@ -235,14 +237,10 @@ Renice a process identified by $pid with the priority $level.
 
 sub nice {
   my ( $pid, $level ) = @_;
-  run "renice $level $pid";
+  i_run "renice $level $pid", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error renicing $pid");
   }
 }
-
-=back
-
-=cut
 
 1;

@@ -12,7 +12,7 @@ Rex::Commands::Inventory - Get an inventory of your systems
 
 With this module you can get an inventory of your system.
 
-All these functions will not be reported. These functions don't change things.
+All these functions will not be reported. These functions don't modify anything.
 
 =head1 SYNOPSIS
 
@@ -24,14 +24,15 @@ All these functions will not be reported. These functions don't change things.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Inventory;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Inventory;
 
@@ -42,7 +43,7 @@ use base qw(Rex::Exporter);
 
 @EXPORT = qw(inventor inventory);
 
-=item inventory
+=head2 inventory
 
 This function returns a hashRef of all gathered hardware. Use the Data::Dumper module to see its structure.
 
@@ -62,9 +63,5 @@ sub inventory {
 sub inventor {
   return inventory();
 }
-
-=back
-
-=cut
 
 1;

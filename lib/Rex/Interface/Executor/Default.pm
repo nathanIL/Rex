@@ -6,9 +6,13 @@
 
 package Rex::Interface::Executor::Default;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
+use Rex::Hook;
 use Rex::Logger;
 use Data::Dumper;
 
@@ -28,37 +32,65 @@ sub new {
 }
 
 sub exec {
-  my ( $self, $opts ) = @_;
-
-  $opts ||= { Rex::Args->get };
+  my ( $self, $opts, $args ) = @_;
 
   my $task = $self->{task};
 
   Rex::Logger::debug( "Executing " . $task->name );
 
-  my $ret;
+  my $wantarray = wantarray;
+
+  my @ret;
   eval {
     my $code = $task->code;
-    $ret = &$code($opts);
-  };
 
-  my %opts = Rex::Args->getopts;
-  if ($@) {
-    if ( exists $opts{c} ) {
-      Rex::Output->get->add( $task->name, error => 1, msg => $@ );
+    Rex::Hook::run_hook( task => "before_execute", $task->name, @_ );
+
+    if ($wantarray) {
+      if ( ref $opts eq "ARRAY" ) {
+        @ret = $code->( @{$opts} );
+      }
+      else {
+        @ret = $code->( $opts, $args );
+      }
     }
     else {
-      Rex::Logger::info( "Error executing task: $@", "error" );
-      die($@);
+      if ( ref $opts eq "ARRAY" ) {
+        $ret[0] = $code->( @{$opts} );
+      }
+      else {
+        $ret[0] = $code->( $opts, $args );
+      }
+    }
+
+    Rex::Hook::run_hook( task => "after_execute", $task->name, @_ );
+  };
+
+  my $error = $@;
+  my %opts  = Rex::Args->getopts;
+
+  if ($error) {
+    if ( exists $opts{o} ) {
+      Rex::Output->get->add( $task->name, error => 1, msg => $error );
+    }
+    else {
+      Rex::Logger::info( "Error executing task:", "error" );
+      Rex::Logger::info( "$error",                "error" );
+      die($error);
     }
   }
   else {
-    if ( exists $opts{c} ) {
+    if ( exists $opts{o} ) {
       Rex::Output->get->add( $task->name );
     }
   }
 
-  return $ret;
+  if ($wantarray) {
+    return @ret;
+  }
+  else {
+    return $ret[0];
+  }
 }
 
 1;

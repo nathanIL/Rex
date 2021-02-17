@@ -20,17 +20,19 @@ With this module you can run a command.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Run;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 #require Exporter;
 require Rex::Exporter;
+use Net::OpenSSH::ShellQuoter;
 use Data::Dumper;
 use Rex;
 use Rex::Logger;
@@ -57,9 +59,23 @@ use base qw(Rex::Exporter);
 
 @EXPORT = qw(run can_run sudo);
 
-=item run($command [, $callback])
+=head2 run($command [, $callback], %options)
 
-This function will execute the given command and returns the output. In scalar context it returns the raw output as is, and in list context it returns the list of output lines.
+=head2 run($command, $arguments, %options)
+
+This form will execute $command with the given $arguments.
+$arguments must be an array reference. The arguments will be quoted.
+
+ run "ls", ["-l", "-t", "-r", "-a"];
+ run "ls", ["/tmp", "-l"], auto_die => TRUE;
+
+=head2 run($command_description, command => $command, %options)
+
+This function will execute the given command and returns the output. In
+scalar context it returns the raw output as is, and in list context it
+returns the list of output lines. The exit value of the command is stored
+in the $? variable.
+
 
  task "uptime", "server01", sub {
    say run "uptime";
@@ -69,6 +85,35 @@ This function will execute the given command and returns the output. In scalar c
      say "[$server] $stdout\n";
    };
  };
+
+Supported options are:
+
+  cwd             => $path
+    sets the working directory of the executed command to $path
+  only_if         => $condition_command
+    executes the command only if $condition_command completes successfully
+  unless          => $condition_command
+    executes the command unless $condition_command completes successfully
+  only_notified   => TRUE
+    queues the command, to be executed upon notification (see below)
+  env             => { var1 => $value1, ..., varN => $valueN }
+    sets environment variables in the environment of the command
+  timeout         => value
+    sets the timeout for the command to be run
+  auto_die        => TRUE
+    die if the command returns with a non-zero exit code
+    it can be set globally via the exec_autodie feature flag
+  command         => $command_to_run
+    if set, run tries to execute the specified command and the first argument
+    becomes an identifier for the run block (e.g. to be triggered with notify)
+  creates         => $file_to_create
+    tries to create $file_to_create upon execution
+    skips execution if the file already exists
+  continuous_read => $callback
+    calls $callback subroutine reference for each line of the command's output,
+    passing the line as an argument
+
+Examples:
 
 If you only want to run a command in special cases, you can queue the command
 and notify it when you want to run it.
@@ -83,7 +128,7 @@ and notify it when you want to run it.
    notify "run", "extract-something";  # now the command gets executed
  };
 
-If you only want to run a command if an other command succeed or fail, you can use
+If you only want to run a command if another command succeeds or fails, you can use
 I<only_if> or I<unless> option.
 
  run "some-command",
@@ -92,10 +137,11 @@ I<only_if> or I<unless> option.
  run "some-other-command",
    unless => "ps -ef | grep -q httpd";    # only run if httpd is not running
 
-If you want to set custom environment variables you can do this like this:
+If you want to set custom environment variables you can do it like this:
 
  run "my_command",
-   env => {
+
+    env => {
      env_var_1 => "the value for 1",
      env_var_2 => "the value for 2",
    };
@@ -106,16 +152,30 @@ If you want to end the command upon receiving a certain output:
    
 =cut
 
-our $LAST_OUTPUT;    # this variable stores the last output of a run.
-    # so that it is possible to get for example the output of an apt-get update
-    # that is called through >> install "foo" <<
+our $LAST_OUTPUT; # this variable stores the last output of a run.
+                  # so that it is possible to get for example the output of an apt-get update
+                  # that is called through >> install "foo" <<
 
 sub run {
   my $cmd = shift;
+
+  if ( ref $cmd eq "ARRAY" ) {
+    for my $_cmd ( @{$cmd} ) {
+      &run( $_cmd, @_ );
+    }
+    return;
+  }
+
   my ( $code, $option );
   if ( ref $_[0] eq "CODE" ) {
     $code = shift;
   }
+
+  my ($args);
+  if ( ref $_[0] eq "ARRAY" ) {
+    $args = shift;
+  }
+
   if ( scalar @_ > 0 ) {
     $option = {@_};
   }
@@ -152,7 +212,7 @@ sub run {
   Rex::get_current_connection()->{reporter}
     ->report_resource_start( type => "run", name => $res_cmd );
 
-  my $changed = 1;    # default for run() is 1
+  my $changed = 1; # default for run() is 1
 
   if ( exists $option->{creates} ) {
     my $fs = Rex::Interface::Fs->create();
@@ -169,7 +229,7 @@ sub run {
       Rex::Logger::debug(
         "Don't executing $cmd because $option->{only_if} return $?.");
       $changed = 0;
-      $?       = 0;    # reset $?
+      $?       = 0; # reset $?
     }
   }
 
@@ -183,6 +243,7 @@ sub run {
   }
 
   my $out_ret;
+  my ( $out, $err );
 
   if ($changed) {
     my $path;
@@ -191,8 +252,13 @@ sub run {
       $path = join( ":", Rex::Config->get_path() );
     }
 
-    my ( $out, $err );
     my $exec = Rex::Interface::Exec->create;
+
+    if ( $args && ref($args) eq "ARRAY" ) {
+      my $quoter = Net::OpenSSH::ShellQuoter->quoter( $exec->shell->name );
+      $cmd = "$cmd " . join( " ", map { $quoter->quote($_) } @{$args} );
+    }
+
     if ( exists $option->{timeout} && $option->{timeout} > 0 ) {
       eval {
         local $SIG{ALRM} = sub { die("timeout"); };
@@ -228,7 +294,7 @@ sub run {
         if ( Rex::Config->get_verbose_run );
     }
     elsif ( $? != 0 && $? != 300 ) {
-      Rex::Logger::info( "Error executing $cmd: Return-Code: $?", "warn" )
+      Rex::Logger::info( "Error executing $cmd: Return code: $?", "warn" )
         if ( Rex::Config->get_verbose_run );
     }
     elsif ( $? == 0 ) {
@@ -246,7 +312,7 @@ sub run {
 
     Rex::get_current_connection()->{reporter}->report(
       changed => 1,
-      message => "Command ($cmd) executed. Return-Code: $?"
+      message => "Command ($cmd) executed. Return code: $?"
     );
   }
   else {
@@ -258,7 +324,7 @@ sub run {
 
   if ( exists $option->{auto_die} && $option->{auto_die} ) {
     if ( $? != 0 ) {
-      die("Error executing: $cmd.\nOutput:\n$out_ret");
+      die("Error executing: $cmd.\nSTDOUT:\n$out\nSTDERR:\n$err");
     }
   }
 
@@ -269,7 +335,7 @@ sub run {
   return $out_ret;
 }
 
-=item can_run($command)
+=head2 can_run($command)
 
 This function checks if a command is in the path or is available. You can
 specify multiple commands, the first command found will be returned.
@@ -283,64 +349,66 @@ specify multiple commands, the first command found will be returned.
 =cut
 
 sub can_run {
-  my @cmds = @_;
-
-  if ( !Rex::is_ssh() && $^O =~ m/^MSWin/ ) {
-    return 1;
-  }
-
-  for my $cmd (@cmds) {
-    my @ret = i_run "which $cmd";
-    next if ( $? != 0 );
-
-    if ( grep { /^no.*in/ } @ret ) {
-      next;
-    }
-    else {
-      return $ret[0];
-    }
-  }
-
-  return 0;
+  my @commands = @_;
+  my $exec     = Rex::Interface::Exec->create;
+  $exec->can_run( [@commands] ); # use a new anon ref, so that we don't have drawbacks if some lower layers will manipulate things.
 }
 
-=item sudo
+=head2 sudo
 
-Run a command with I<sudo>. Define the password for sudo with I<sudo_password>.
+Run a single command, a code block, or all commands with C<sudo>. You need perl to be available on the remote systems to use C<sudo>.
 
-You can use this function to run one command with sudo privileges or to turn on sudo globaly.
+Depending on your remote sudo configuration, you may need to define a sudo password with I<sudo_password> first:
 
- user "unprivuser";
- sudo_password "f00b4r";
- sudo -on;  # turn sudo globaly on
+ sudo_password 'my_sudo_password'; # hardcoding
 
- task prepare => sub {
-   install "apache2";
-   file "/etc/ntp.conf",
-     source => "files/etc/ntp.conf",
-     owner  => "root",
-     mode  => 640;
+Or alternatively, since Rexfile is plain perl, you can read the password from terminal at the start:
+
+ use Term::ReadKey;
+ 
+ print 'I need sudo password: ';
+ ReadMode('noecho');
+ sudo_password ReadLine(0);
+ ReadMode('restore');
+
+Similarly, it is also possible to read it from a secret file, database, etc.
+
+You can turn sudo on globally with:
+
+ sudo TRUE; # run _everything_ with sudo
+
+To run only a specific command with sudo, use :
+
+ say sudo 'id';                # passing a remote command directly
+ say sudo { command => 'id' }; # passing anonymous hashref
+ 
+ say sudo { command => 'id', user => 'different' }; # run a single command with sudo as different user
+ 
+ # running a single command with sudo as different user, and `cd` to another directory too
+ say sudo { command => 'id', user => 'different', cwd => '/home/different' };
+
+To run multiple commands with C<sudo>, either use an anonymous code reference directly:
+
+ sudo sub {
+     service 'nginx' => 'restart';
+     say run 'id';
  };
 
-Or, if you don't turning sudo globaly on.
+or pass it via C<command> (optionally along a different user):
 
- task prepare => sub {
-   file "/tmp/foo.txt",
-     content => "this file was written without sudo privileges\n";
-
-   # everything in this section will be executed with sudo privileges
-   sudo sub {
-     install "apache2";
-     file "/tmp/foo2.txt",
-       content => "this file was written with sudo privileges\n";
-   };
+ sudo {
+     command => sub {
+         say run 'id';
+         say run 'pwd', cwd => '/home/different';
+     },
+     user => 'different',
  };
 
-Run only one command within sudo.
+B<Note> that some users receive the error C<sudo: sorry, you must have a tty
+to run sudo>. In this case you have to disable C<requiretty> for this user.
+You can do this in your sudoers file with the following code:
 
- task "eth1-down", sub {
-  sudo "ifconfig eth1 down";
- };
+   Defaults:$username !requiretty
 
 =cut
 
@@ -354,20 +422,18 @@ sub sudo {
   }
 
   if ( $cmd eq "on" || $cmd eq "-on" || $cmd eq "1" ) {
-    Rex::Logger::debug("Turning sudo globaly on");
+    Rex::Logger::debug("Turning sudo globally on");
     Rex::global_sudo(1);
     return;
   }
   elsif ( $cmd eq "0" ) {
-    Rex::Logger::debug("Turning sudo globaly off");
+    Rex::Logger::debug("Turning sudo globally off");
     Rex::global_sudo(0);
     return;
   }
 
-  my $old_sudo    = Rex::get_current_connection()->{use_sudo}     || 0;
-  my $old_options = Rex::get_current_connection()->{sudo_options} || {};
-  Rex::get_current_connection()->{use_sudo}     = 1;
-  Rex::get_current_connection()->{sudo_options} = $options;
+  Rex::get_current_connection_object()->push_use_sudo(1);
+  Rex::get_current_connection_object()->push_sudo_options( %{$options} );
 
   my $ret;
 
@@ -376,17 +442,13 @@ sub sudo {
     $ret = &$cmd();
   }
   else {
-    $ret = i_run($cmd);
+    $ret = i_run( $cmd, fail_ok => 1 );
   }
 
-  Rex::get_current_connection()->{use_sudo}     = $old_sudo;
-  Rex::get_current_connection()->{sudo_options} = $old_options;
+  Rex::get_current_connection_object()->pop_use_sudo();
+  Rex::get_current_connection_object()->pop_sudo_options();
 
   return $ret;
 }
-
-=back
-
-=cut
 
 1;

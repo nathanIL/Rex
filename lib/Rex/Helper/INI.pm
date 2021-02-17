@@ -6,10 +6,13 @@
 
 package Rex::Helper::INI;
 
+use 5.010001;
 use strict;
 use warnings;
 
-BEGIN { String::Escape->use('string2hash'); };
+our $VERSION = '9999.99.99_99'; # VERSION
+
+BEGIN { String::Escape->use('string2hash'); }
 
 sub parse {
   my (@lines) = @_;
@@ -22,7 +25,7 @@ sub parse {
 
     (/^#|^;|^\s*$/) && (next);
 
-    if (/^\[(.*)\]/) {
+    if ( /^\[(.*)\]/ && !/^\[(\d+((?:,)|(?:\.\.))*)+(\/\d+)*\]/ ) {
 
       # check for inheritance
       $section = $1;

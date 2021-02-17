@@ -6,8 +6,11 @@
 
 package Rex::Inventory::DMIDecode::Memory;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Inventory::DMIDecode::Section;
 use base qw(Rex::Inventory::DMIDecode::Section);
@@ -21,7 +24,7 @@ __PACKAGE__->has(
     'Locator',
   ],
   1
-);    # is_array 1
+); # is_array 1
 
 sub new {
   my $that  = shift;

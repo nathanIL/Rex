@@ -6,11 +6,12 @@
 
 package Rex::Service::NetBSD;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
-use Rex::Helper::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Commands::File;
 use Rex::Logger;
 
@@ -24,12 +25,12 @@ sub new {
   bless( $self, $proto );
 
   $self->{commands} = {
-    start   => '/etc/rc.d/%s onestart >/dev/null',
-    restart => '/etc/rc.d/%s onerestart >/dev/null',
-    stop    => '/etc/rc.d/%s onestop >/dev/null',
-    reload  => '/etc/rc.d/%s onereload >/dev/null',
-    status  => '/etc/rc.d/%s onestatus >/dev/null',
-    action  => '/etc/rc.d/%s %s >/dev/null',
+    start   => '/etc/rc.d/%s onestart',
+    restart => '/etc/rc.d/%s onerestart',
+    stop    => '/etc/rc.d/%s onestop',
+    reload  => '/etc/rc.d/%s onereload',
+    status  => '/etc/rc.d/%s onestatus',
+    action  => '/etc/rc.d/%s %s',
   };
 
   return $self;
@@ -42,11 +43,16 @@ sub ensure {
 
   if ( $what =~ /^stop/ ) {
     $self->stop( $service, $options );
-    delete_lines_matching "/etc/rc.conf", matching => qr/${service}=YES/;
+    file "/etc/rc.conf.d/${service}", ensure => "absent";
+    delete_lines_matching "/etc/rc.conf",
+      matching => qr/^\s*${service}="?((?i)YES)"?/;
   }
   elsif ( $what =~ /^start/ || $what =~ m/^run/ ) {
     $self->start( $service, $options );
-    append_if_no_such_line "/etc/rc.conf", "${service}=YES\n";
+    file "/etc/rc.conf.d/${service}", ensure => "absent";
+    append_or_amend_line "/etc/rc.conf",
+      line   => "${service}=YES",
+      regexp => qr/^\s*${service}="?((?i)YES|NO)"?/;
   }
 
   return 1;

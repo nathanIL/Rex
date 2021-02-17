@@ -6,13 +6,13 @@
 
 package Rex::Service::Redhat::systemd;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Helper::Run;
-use Rex::Logger;
-use Rex::Commands::Fs;
 
 use base qw(Rex::Service::Base);
 
@@ -24,13 +24,14 @@ sub new {
   bless( $self, $proto );
 
   $self->{commands} = {
-    start        => 'systemctl start %s >/dev/null',
-    restart      => 'systemctl restart %s >/dev/null',
-    stop         => 'systemctl stop %s >/dev/null',
-    reload       => 'systemctl reload %s >/dev/null',
-    status       => 'systemctl status %s >/dev/null',
-    ensure_stop  => 'systemctl disable %s',
-    ensure_start => 'systemctl enable %s',
+    start          => 'systemctl --no-pager start %s',
+    restart        => 'systemctl --no-pager restart %s',
+    stop           => 'systemctl --no-pager stop %s',
+    reload         => 'systemctl --no-pager reload %s',
+    status         => 'systemctl --no-pager is-active %s',
+    ensure_stop    => 'systemctl --no-pager disable %s',
+    ensure_start   => 'systemctl --no-pager enable %s',
+    service_exists => 'systemctl --no-pager show %s | grep LoadState=loaded',
   };
 
   return $self;
@@ -45,14 +46,24 @@ sub _prepare_service_name {
     $service .= ".service";
   }
 
+  $self->SUPER::_prepare_service_name($service);
+
   return $service;
 }
 
 sub action {
   my ( $self, $service, $action ) = @_;
 
-  i_run "systemctl $action $service >/dev/null", nohup => 1;
-  if ( $? == 0 ) { return 1; }
+  my $ret_val;
+  eval {
+    i_run "systemctl --no-pager $action $service >/dev/null", nohup => 1;
+    $ret_val = 1;
+    1;
+  } or do {
+    $ret_val = 0;
+  };
+
+  return $ret_val;
 }
 
 1;

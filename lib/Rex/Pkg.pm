@@ -6,8 +6,11 @@
 
 package Rex::Pkg;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Config;
 use Rex::Commands::Gather;
@@ -37,6 +40,10 @@ sub get {
 #if(lc($host->{"operatingsystem"}) eq "centos" || lc($host->{"operatingsystem"}) eq "redhat") {
   if ( is_redhat() ) {
     $host->{"operatingsystem"} = "Redhat";
+  }
+
+  if ( is_debian() ) {
+    $host->{"operatingsystem"} = "Debian";
   }
 
   my $class = "Rex::Pkg::" . $host->{"operatingsystem"};

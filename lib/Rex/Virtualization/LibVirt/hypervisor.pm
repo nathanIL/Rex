@@ -6,8 +6,11 @@
 
 package Rex::Virtualization::LibVirt::hypervisor;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::Run;
@@ -25,12 +28,11 @@ sub execute {
   unless ($arg1) {
     die("You have to define the vm name!");
   }
-
-  my ( $xml, @dominfo, $dom );
+  my ( $xml, @dominfo );
   if ( $arg1 eq 'capabilities' ) {
-    @dominfo = i_run "virsh -c $uri capabilities";
+    @dominfo = i_run "virsh -c $uri capabilities", fail_ok => 1;
     if ( $? != 0 ) {
-      die("Error running virsh dominfo $dom");
+      die("Error running virsh capabilities");
     }
 
     my $xs = XML::Simple->new();

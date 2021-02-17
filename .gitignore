@@ -1,6 +1,8 @@
+*~
 .DS_Store
 *.sw*
 Makefile
+Rex-*/
 *.tar*
 blib
 *-stamp
@@ -19,3 +21,11 @@ doc/bootstrap.pod
 doc/html
 *.txt
 screencasts
+.build
+vars.db
+vars.db.lock
+.includepath
+.project
+tmp/
+cover_db
+xt/author/.perlcritic-history

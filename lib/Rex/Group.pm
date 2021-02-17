@@ -6,8 +6,11 @@
 
 package Rex::Group;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 
@@ -15,7 +18,7 @@ use attributes;
 use Rex::Group::Entry::Server;
 
 use vars qw(%groups);
-use List::MoreUtils qw(uniq);
+use List::Util 1.45 qw(uniq);
 use Data::Dumper;
 
 sub new {
@@ -24,6 +27,9 @@ sub new {
   my $self  = {@_};
 
   bless( $self, $proto );
+  for my $srv ( @{ $self->{servers} } ) {
+    $srv->append_to_group( $self->{name} );
+  }
 
   return $self;
 }
@@ -34,7 +40,7 @@ sub get_servers {
   my @servers = map { ref( $_->to_s ) eq "CODE" ? &{ $_->to_s } : $_ }
     @{ $self->{servers} };
 
-  return @servers;
+  return uniq @servers;
 }
 
 sub set_auth {
@@ -65,10 +71,10 @@ sub create_group {
 
   my @server_obj;
   for ( my $i = 0 ; $i <= $#server ; $i++ ) {
-    next if ref $server[$i] eq 'HASH';    # already processed by previous loop
+    next if ref $server[$i] eq 'HASH'; # already processed by previous loop
 
     # if argument is already a Rex::Group::Entry::Server
-    if ( ref( $server[$i] ) eq "Rex::Group::Entry::Server" ) {
+    if ( ref $server[$i] && $server[$i]->isa("Rex::Group::Entry::Server") ) {
       push @server_obj, $server[$i];
       next;
     }
@@ -79,11 +85,12 @@ sub create_group {
       ? %{ $server[ $i + 1 ] }
       : ();
 
-    push @server_obj,
-      Rex::Group::Entry::Server->new( name => $server[$i], %options );
+    my $obj = Rex::Group::Entry::Server->new( name => $server[$i], %options );
+    push @server_obj, $obj;
   }
 
-  $groups{$group_name} = Rex::Group->new( servers => \@server_obj );
+  $groups{$group_name} =
+    Rex::Group->new( servers => \@server_obj, name => $group_name );
 }
 
 # returns the servers in the group

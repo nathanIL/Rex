@@ -6,8 +6,11 @@
 
 package Rex::User::SunOS;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Commands::Run;
@@ -25,7 +28,7 @@ use base qw(Rex::User::OpenBSD);
 sub new {
   my $that  = shift;
   my $proto = ref($that) || $that;
-  my $self  = $that->SUPER::new(@_);
+  my $self  = $proto->SUPER::new(@_);
 
   bless( $self, $proto );
 
@@ -74,7 +77,7 @@ sub create_user {
     $cmd .= " -d " . $data->{home};
   }
 
-  if ( $should_create_home && !defined $uid ) {    #useradd mode
+  if ( $should_create_home && !defined $uid ) { #useradd mode
     $cmd .= " -m ";
   }
 
@@ -107,7 +110,7 @@ sub create_user {
   $fh->write("$cmd $user\nexit \$?\n");
   $fh->close;
 
-  i_run "/bin/sh $rnd_file";
+  i_run "/bin/sh $rnd_file", fail_ok => 1;
   if ( $? == 0 ) {
     Rex::Logger::debug("User $user created/updated.");
   }
@@ -160,7 +163,7 @@ expect eof
       $fh->close;
 
       chmod 700, $chpasswd_file;
-      i_run "/bin/sh $rnd_file";
+      i_run "/bin/sh $rnd_file", fail_ok => 1;
       if ( $? != 0 ) { die("Error changing user's password."); }
 
       rm $chpasswd_file;

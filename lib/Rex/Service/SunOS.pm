@@ -6,10 +6,12 @@
 
 package Rex::Service::SunOS;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Helper::Run;
 use Rex::Logger;
 use Rex::Commands::Fs;
@@ -24,12 +26,12 @@ sub new {
   bless( $self, $proto );
 
   $self->{commands} = {
-    start   => '/etc/init.d/%s start >/dev/null',
-    restart => '/etc/init.d/%s restart >/dev/null',
-    stop    => '/etc/init.d/%s stop >/dev/null',
-    reload  => '/etc/init.d/%s reload >/dev/null',
-    status  => '/etc/init.d/%s status >/dev/null',
-    action  => '/etc/init.d/%s %s >/dev/null',
+    start   => '/etc/init.d/%s start',
+    restart => '/etc/init.d/%s restart',
+    stop    => '/etc/init.d/%s stop',
+    reload  => '/etc/init.d/%s reload',
+    status  => '/etc/init.d/%s status',
+    action  => '/etc/init.d/%s %s',
   };
 
   return $self;
@@ -42,11 +44,11 @@ sub ensure {
 
   if ( $what =~ /^stop/ ) {
     $self->stop( $service, $options );
-    i_run "rm /etc/rc*.d/S*$service";
+    eval { i_run "rm /etc/rc*.d/S*$service"; };
   }
   elsif ( $what =~ /^start/ || $what =~ m/^run/ ) {
     $self->start( $service, $options );
-    my ($runlevel) = grep { $_ = $1 if m/run\-level (\d)/ } i_run "who -r";
+    my ($runlevel) = map { /run-level (\d)/ } i_run "who -r";
     ln "/etc/init.d/$service", "/etc/rc${runlevel}.d/S99$service";
   }
 

@@ -6,11 +6,20 @@
 
 package Rex::Interface::Connection::SSH;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Interface::Connection::Base;
+our $VERSION = '9999.99.99_99'; # VERSION
 
+BEGIN {
+  use Rex::Require;
+  Net::SSH2->require;
+}
+
+use Carp;
+use Rex::Helper::IP;
+use Rex::Interface::Connection::Base;
 use base qw(Rex::Interface::Connection::Base);
 
 sub new {
@@ -31,8 +40,6 @@ sub connect {
     $port, $timeout, $auth_type,   $is_sudo
   );
 
-  Rex::Logger::debug("Using Net::SSH2 for connection");
-
   $user        = $option{user};
   $pass        = $option{password};
   $server      = $option{server};
@@ -43,39 +50,38 @@ sub connect {
   $auth_type   = $option{auth_type};
   $is_sudo     = $option{sudo};
 
-  $self->{is_sudo} = $is_sudo;
-
+  $self->{server}        = $server;
+  $self->{is_sudo}       = $is_sudo;
   $self->{__auth_info__} = \%option;
 
+  Rex::Logger::debug("Using Net::SSH2 for connection");
   Rex::Logger::debug( "Using user: " . $user );
-  Rex::Logger::debug(
-    "Using password: " . ( $pass ? "***********" : "<no password>" ) );
-
-  $self->{server} = $server;
+  Rex::Logger::debug( Rex::Logger::masq( "Using password: %s", $pass ) )
+    if defined $pass;
 
   $self->{ssh} = Net::SSH2->new;
 
   my $fail_connect = 0;
 
 CON_SSH:
-  $port ||= Rex::Config->get_port( server => $server ) || 22;
+  $port    ||= Rex::Config->get_port( server => $server )    || 22;
   $timeout ||= Rex::Config->get_timeout( server => $server ) || 3;
+  $self->{ssh}->timeout( $timeout * 1000 );
 
   $server =
     Rex::Config->get_ssh_config_hostname( server => $server ) || $server;
 
-  if ( $server =~ m/^(.*?):(\d+)$/ ) {
-    $server = $1;
-    $port   = $2;
-  }
-  Rex::Logger::info( "Connecting to $server:$port (" . $user . ")" );
-  unless ( $self->{ssh}->connect( $server, $port, Timeout => $timeout ) ) {
+  ( $server, $port ) = Rex::Helper::IP::get_server_and_port( $server, $port );
+
+  Rex::Logger::debug( "Connecting to $server:$port (" . $user . ")" );
+
+  unless ( $self->{ssh}->connect( $server, $port ) ) {
     ++$fail_connect;
     sleep 1;
     goto CON_SSH
       if (
       $fail_connect < Rex::Config->get_max_connect_fails( server => $server ) )
-      ;    # try connecting 3 times
+      ; # try connecting 3 times
 
     Rex::Logger::info( "Can't connect to $server", "warn" );
 
@@ -85,7 +91,7 @@ CON_SSH:
   }
 
   Rex::Logger::debug( "Current Error-Code: " . $self->{ssh}->error() );
-  Rex::Logger::info("Connected to $server, trying to authenticate.");
+  Rex::Logger::debug("Connected to $server, trying to authenticate.");
 
   $self->{connected} = 1;
 
@@ -104,6 +110,10 @@ CON_SSH:
   }
   elsif ( $auth_type && $auth_type eq "key" ) {
     Rex::Logger::debug("Using key authentication.");
+
+    croak "No public_key file defined."  if !$public_key;
+    croak "No private_key file defined." if !$private_key;
+
     $self->{auth_ret} =
       $self->{ssh}->auth_publickey( $user, $public_key, $private_key, $pass );
   }
@@ -112,7 +122,7 @@ CON_SSH:
     $self->{auth_ret} = $self->{ssh}->auth(
       'username'   => $user,
       'password'   => $pass,
-      'publickey'  => $public_key || "",
+      'publickey'  => $public_key  || "",
       'privatekey' => $private_key || ""
     );
   }

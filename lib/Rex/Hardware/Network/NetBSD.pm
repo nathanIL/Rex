@@ -6,11 +6,13 @@
 
 package Rex::Hardware::Network::NetBSD;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
-use Rex::Commands::Run;
 use Rex::Helper::Array;
 use Rex::Hardware::Network::OpenBSD;
 

@@ -6,8 +6,11 @@
 
 package Rex::Interface::Connection::Local;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Interface::Connection::Base;
 use Rex::Group::Entry::Server;
@@ -34,6 +37,18 @@ sub get_fs_connection_object { my ($self) = @_; return $self; }
 sub is_connected             { return 1; }
 sub is_authenticated         { return 1; }
 
-sub get_connection_type { return "Local"; }
+sub get_auth_user {
+  return Rex::Config::get_user();
+}
+
+sub get_connection_type {
+  my ($self) = @_;
+
+  if ( ( $self->{is_sudo} && $self->{is_sudo} == 1 ) || Rex::is_sudo() ) {
+    return "Sudo";
+  }
+
+  return "Local";
+}
 
 1;

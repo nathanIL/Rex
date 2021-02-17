@@ -6,8 +6,11 @@
 
 package Rex::Args::Integer;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 
@@ -22,7 +25,7 @@ sub get {
 
   Rex::Logger::debug("Invalid argument for $name");
 
-  return undef;
+  return;
 }
 
 1;

@@ -55,20 +55,20 @@ Version <= 1.0: All these functions will not be reported.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Box;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use YAML;
 use Data::Dumper;
 
 use Rex::Commands -no => [qw/auth/];
-use Rex::Commands::Run;
 use Rex::Commands::Fs;
 use Rex::Commands::Virtualization;
 use Rex::Commands::Gather;
@@ -102,7 +102,7 @@ Rex::Config->register_set_handler(
   }
 );
 
-=item new(name => $box_name)
+=head2 new(name => $box_name)
 
 Constructor if used in OO mode.
 
@@ -115,7 +115,7 @@ sub new {
   return Rex::Box->create(@_);
 }
 
-=item box(sub {})
+=head2 box(sub {})
 
 With this function you can create a new Rex/Box. The first parameter of this function is the Box object. With this object you can define your box.
 
@@ -170,9 +170,11 @@ sub box(&) {
   $self->import_vm();
 
   $self->provision_vm();
+
+  return $self->ip;
 }
 
-=item list_boxes
+=head2 list_boxes
 
 This function returns an array of hashes containing all information that can be gathered from the hypervisor about the Rex/Box. This function doesn't start a Rex/Box.
 
@@ -217,7 +219,7 @@ sub list_boxes {
   return @{$ref};
 }
 
-=item get_box($box_name)
+=head2 get_box($box_name)
 
 This function tries to gather all information of a Rex/Box. This function also starts a Rex/Box to gather all information of the running system.
 
@@ -272,12 +274,14 @@ sub get_box {
     my $old_q = $::QUIET;
     $::QUIET = 1;
 
-    eval { $vm_infos{$box_name} = run_task "get_sys_info", on => $box_ip; }
-      or do {
+    eval {
+      $vm_infos{$box_name} = run_task "Commands:Box:get_sys_info",
+        on => $box_ip;
+    } or do {
       $::QUIET = $old_q;
       print STDERR "\n";
       Rex::Logger::info(
-        "There was an error connecting to your Box. Please verify the login credentials.",
+        "There was an error connecting to your Box. Please verify the login credentials.\nERROR: $@\n",
         "warn"
       );
       Rex::Logger::debug(
@@ -286,7 +290,7 @@ sub get_box {
       # cleanup
       kill 9, $pid;
       CORE::exit(1);
-      };
+    };
     $::QUIET = $old_q;
 
     for my $key ( keys %{$box_info} ) {
@@ -305,7 +309,7 @@ sub get_box {
 
 }
 
-=item boxes($action, @data)
+=head2 boxes($action, @data)
 
 With this function you can control your boxes. Currently there are 3 actions.
 
@@ -371,6 +375,7 @@ sub boxes {
       @vms = @{ $yaml_ref->{vms} };
     }
 
+    my $box_vms = {};
     for my $vm_ref (@vms) {
       my $vm = $vm_ref->{name};
       box {
@@ -389,8 +394,12 @@ sub boxes {
             $box->$key( $vm_ref->{$key} );
           }
         }
+
+        $box_vms->{$vm} = $box;
       };
     }
+
+    return $box_vms;
   }
 
   if ( $action eq "stop" ) {
@@ -409,54 +418,50 @@ sub boxes {
 
 }
 
-Rex::TaskList->create()->create_task(
-  "get_sys_info",
-  sub {
-    return { get_system_information() };
-  },
-  { dont_register => 1, exit_on_connect_fail => 0 }
-);
+task 'get_sys_info', sub {
+  return { get_system_information() };
+}, { dont_register => 1, exit_on_connect_fail => 0 };
+
+sub load_init_file {
+  my ( $class, $file ) = @_;
+
+  if ( !-f $file ) {
+    die("Error: Wrong configuration file: $file.");
+  }
+
+  my $yaml_str = eval { local ( @ARGV, $/ ) = ($file); <>; };
+  $yaml_str .= "\n";
+
+  my $yaml_ref = Load($yaml_str);
+
+  if ( !exists $yaml_ref->{type} ) {
+    die("You have to define a type.");
+  }
+
+  my $type = ucfirst $yaml_ref->{type};
+  set box_type => $type;
+
+  # set special box options, like amazon out
+  if ( exists $yaml_ref->{"\L$type"} ) {
+    set box_options => $yaml_ref->{"\L$type"};
+  }
+  elsif ( exists $yaml_ref->{$type} ) {
+    set box_options => $yaml_ref->{$type};
+  }
+
+  $VM_STRUCT = $yaml_ref;
+}
 
 sub import {
   my ( $class, %option ) = @_;
 
   if ( $option{init_file} ) {
     my $file = $option{init_file};
-
-    if ( !-f $file ) {
-      die("Error: Wrong configuration file: $file.");
-    }
-
-    my $yaml_str = eval { local ( @ARGV, $/ ) = ($file); <>; };
-    $yaml_str .= "\n";
-
-    my $yaml_ref = Load($yaml_str);
-
-    if ( !exists $yaml_ref->{type} ) {
-      die("You have to define a type.");
-    }
-
-    my $type = ucfirst $yaml_ref->{type};
-    set box_type => $type;
-
-    # set special box options, like amazon out
-    if ( exists $yaml_ref->{"\L$type"} ) {
-      set box_options => $yaml_ref->{"\L$type"};
-    }
-    elsif ( exists $yaml_ref->{$type} ) {
-      set box_options => $yaml_ref->{$type};
-    }
-
-    $VM_STRUCT = $yaml_ref;
-
+    $class->load_init_file($file);
     @_ = ($class);
   }
 
   __PACKAGE__->export_to_level( 1, @_ );
 }
-
-=back
-
-=cut
 
 1;

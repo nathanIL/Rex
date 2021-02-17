@@ -6,8 +6,11 @@
 
 package Rex::Inventory;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Inventory::DMIDecode;
 use Rex::Inventory::Hal;
@@ -108,7 +111,7 @@ sub get {
             push(
               @raid_logical_drives,
               {
-                status => ( $l_drive_data->{"status"} eq "OK" ? 1 : 0 ),
+                status     => ( $l_drive_data->{"status"} eq "OK" ? 1 : 0 ),
                 raid_level => $l_drive_data->{"fault_tolerance"},
                 size       => sprintf( "%i", $size * $multi ),
                 dev        => $l_drive_data->{"disk_name"},
@@ -131,7 +134,7 @@ sub get {
             type          => $hp_raid->{$key}->{"description"},
             model         => $hp_raid->{$key}->{"model"},
             serial_number => $hp_raid->{$key}->{"serial_number"},
-            cache_status =>
+            cache_status  =>
               ( $hp_raid->{$key}->{"cache_status"} eq "OK" ? 1 : 0 ),
             shelfs => \%raid_shelfs,
           }
@@ -150,8 +153,8 @@ sub get {
   }
 
   return {
-    base_board => ( $base_board ? $base_board->get_all() : {} ),
-    bios => $bios->get_all(),
+    base_board  => ( $base_board ? $base_board->get_all() : {} ),
+    bios        => $bios->get_all(),
     system_info => $sys_info->get_all(),
     cpus        => sub {
       my $ret = [];
@@ -207,7 +210,7 @@ sub get {
       host => {
         name   => [ run "hostname -s" ]->[0],
         domain => [ run "hostname -d" || qw() ]->[0],
-        kernel => [ run "uname -r" || qw() ]->[0],
+        kernel => [ run "uname -r"    || qw() ]->[0],
       },
     },
     fusion_inventory => $fusion_inventory_xmlref,

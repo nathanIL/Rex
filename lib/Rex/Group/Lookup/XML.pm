@@ -20,15 +20,16 @@ With this module you can define hostgroups out of an xml file.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Group::Lookup::XML;
 
+use 5.010001;
 use strict;
 use warnings;
 use Rex -base;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 require Exporter;
 use base qw(Exporter);
@@ -37,13 +38,13 @@ XML::LibXML->require;
 
 @EXPORT = qw(groups_xml);
 
-=item groups_xml($file)
+=head2 groups_xml($file)
 
 With this function you can read groups from xml files.
 
-File Example:
+File example:
 
-<configuration>
+ <configuration>
    <group name="database">
        <server name="machine01" user="root" password="foob4r" sudo="true" hdd="300" loc="/opt" />
    </group>
@@ -54,19 +55,15 @@ File Example:
    <group name="profiler">
        <server name="machine03" user="root" password="blue123"/>
    </group>
-</configuration>
+ </configuration>
  
- 
- C<groups_xml($file);>
- 
- The XML file is validated against the following DTD schema:
- 
+The XML file is validated against the DTD schema stored in C<Rex::Group::Lookup::XML::$schema_file> as string.
  
 =cut
 
-=item $schema_file
+=head2 $schema_file
 
-A global that defines the XSD schema for which the XML is check against.
+A variable that contains the XSD schema for which the XML is validated against.
 
 =cut
 
@@ -119,7 +116,7 @@ sub groups_xml {
   foreach my $server_node ( $xmldoc->findnodes('/configuration/group/server') )
   {
     my ($group) =
-      map  { $_->getValue() }
+      map { $_->getValue() }
       grep { $_->nodeName eq 'name' } $server_node->parentNode->attributes();
     my %atts =
       map { $_->nodeName => $_->getValue() } $server_node->attributes();
@@ -131,9 +128,5 @@ sub groups_xml {
   }
   group( $_ => @{ $groups{$_} } ) foreach ( keys(%groups) );
 }
-
-=back
-
-=cut
 
 1;

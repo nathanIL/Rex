@@ -6,17 +6,19 @@
 
 package Rex::Hardware::Network::Solaris;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
-use Rex::Commands::Run;
 use Rex::Helper::Run;
 use Rex::Helper::Array;
 
 sub get_network_devices {
 
-  my @device_list = grep { $_ = $1 if /^([a-z0-9]+)\:/i } i_run "ifconfig -a";
+  my @device_list = map { /^([a-z0-9]+)\:/i } i_run "ifconfig -a";
 
   @device_list = array_uniq(@device_list);
   return \@device_list;
@@ -37,9 +39,9 @@ sub get_network_configuration {
       ip      => [ ( $ifconfig =~ m/inet (\d+\.\d+\.\d+\.\d+)/ ) ]->[0],
       netmask => [ ( $ifconfig =~ m/(netmask 0x|netmask )([a-f0-9]+)/ ) ]->[1],
       broadcast => [ ( $ifconfig =~ m/broadcast (\d+\.\d+\.\d+\.\d+)/ ) ]->[0],
-      mac => [
+      mac       => [
         ( $ifconfig =~ m/(ether|address:|lladdr) (..?:..?:..?:..?:..?:..?)/ )
-        ]->[1],
+      ]->[1],
       is_bridge => 0,
     };
 
@@ -53,15 +55,15 @@ sub route {
 
   my @ret = ();
 
-  my @route = i_run "netstat -nr";
+  my @route = i_run "netstat -nr", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error running netstat");
   }
 
   shift @route;
-  shift @route;    # remove first 2 lines
+  shift @route; # remove first 2 lines
   shift @route;
-  shift @route;    # remove first 2 lines
+  shift @route; # remove first 2 lines
 
   for my $route_entry (@route) {
 
@@ -98,13 +100,13 @@ sub default_gateway {
 
   if ($new_default_gw) {
     if ( default_gateway() ) {
-      i_run "route delete default " . default_gateway();
+      i_run "route delete default " . default_gateway(), fail_ok => 1;
       if ( $? != 0 ) {
         die("Error running route del default");
       }
     }
 
-    i_run "route add default $new_default_gw";
+    i_run "route add default $new_default_gw", fail_ok => 1;
     if ( $? != 0 ) {
       die("Error route add default");
     }
@@ -125,7 +127,7 @@ sub default_gateway {
 sub netstat {
 
   my @ret;
-  my @netstat = i_run "netstat -na -f inet -f inet6";
+  my @netstat = i_run "netstat -na -f inet -f inet6", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error running netstat");
   }
@@ -293,7 +295,7 @@ sub netstat {
 
   }
 
-  @netstat = i_run "netstat -na -f unix";
+  @netstat = i_run "netstat -na -f unix", fail_ok => 1;
   shift @netstat;
   shift @netstat;
   shift @netstat;

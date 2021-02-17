@@ -6,10 +6,12 @@
 
 package Rex::Hardware::Kernel;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Helper::Run;
 
 require Rex::Hardware;

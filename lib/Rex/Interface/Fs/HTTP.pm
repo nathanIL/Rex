@@ -6,16 +6,21 @@
 
 package Rex::Interface::Fs::HTTP;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Commands;
 use Rex::Interface::Exec;
 use Rex::Interface::Fs::Base;
 use Data::Dumper;
+
 BEGIN {
+  use Rex::Require;
   MIME::Base64->use;
-};
+}
 use base qw(Rex::Interface::Fs::Base);
 
 sub new {
@@ -73,6 +78,8 @@ sub stat {
   if ( $resp->{ok} ) {
     return %{ $resp->{stat} };
   }
+
+  return undef;
 }
 
 sub is_readable {

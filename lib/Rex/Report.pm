@@ -6,9 +6,12 @@
 
 package Rex::Report;
 
+use 5.010001;
 use strict;
 use warnings;
 use Data::Dumper;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 my $report;
 

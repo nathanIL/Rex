@@ -7,10 +7,12 @@
 
 package Rex::Pkg::OpenWrt;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Helper::Run;
 use Rex::Commands::File;
 use Rex::Pkg::Base;
@@ -36,8 +38,7 @@ sub new {
 sub bulk_install {
   my ( $self, $packages_aref, $option ) = @_;
 
-  delete $option->{version}
-    ;    # makes no sense to specify the same version for several packages
+  delete $option->{version}; # makes no sense to specify the same version for several packages
 
   $self->update( "@{$packages_aref}", $option );
 

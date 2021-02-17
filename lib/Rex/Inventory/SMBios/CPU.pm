@@ -6,8 +6,11 @@
 
 package Rex::Inventory::SMBios::CPU;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Inventory::SMBios::Section;
 use Rex::Logger;
@@ -22,7 +25,7 @@ __PACKAGE__->has(
     { key => 'Status', from => "Processor Status" },
   ],
   1
-);    # is_array 1
+); # is_array 1
 
 sub new {
   my $that  = shift;
@@ -43,7 +46,7 @@ sub num_cores {
 sub get_socket_type {
   my ($self) = @_;
   Rex::Logger::debug("get_socket_type not supported");
-  return undef;
+  return;
 }
 
 1;

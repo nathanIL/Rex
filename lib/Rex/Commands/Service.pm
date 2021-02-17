@@ -32,14 +32,15 @@ With this module you can manage Linux services.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Service;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 require Rex::Exporter;
 
@@ -54,7 +55,7 @@ use Carp;
 
 @EXPORT = qw(service service_provider_for);
 
-=item service($service, $action, [$option])
+=head2 service($service, $action, [$option])
 
 The service function accepts 2 parameters. The first is the service name and the second the action you want to perform.
 
@@ -124,22 +125,21 @@ If you need to define a custom command for start, stop, restart, reload or statu
      reload  => "killall httpd && /usr/local/bin/httpd -f /etc/my/httpd.conf";
  };
 
-This function supports the following hooks:
+This function supports the following L<hooks|Rex::Hook>:
 
-=over 8
+=over 4
 
+=item before_${action}
 
-=item before_I<action>
+For example: C<before_start>, C<before_stop>, C<before_restart>
 
-For example: before_start, before_stop, before_restart
+This gets executed right before the given service action. All original parameters are passed to it.
 
-This gets executed right before the service action.
+=item after_${action}
 
-=item after_I<action>
+For example: C<after_start>, C<after_stop>, C<after_restart>
 
-For example: after_start, after_stop, after_restart
-
-This gets executed right after the service action.
+This gets executed right after the given service action. All original parameters, and any returned results are passed to it.
 
 =back
 
@@ -315,7 +315,7 @@ sub old_service {
 
   elsif ( $action eq "stop" ) {
 
-    if ( $srvc->status($service) ) {    # it runs
+    if ( $srvc->status($service) ) { # it runs
       $changed = 1;
       if ( $srvc->stop($service) ) {
         Rex::Logger::info("Service $service stopped.");
@@ -360,7 +360,7 @@ sub old_service {
 
     if ( $srvc->ensure( $service, { ensure => $options } ) ) {
       $changed = 0;
-      $return = 1 if !$is_multiple;
+      $return  = 1 if !$is_multiple;
     }
     else {
       $return = 0 if !$is_multiple;
@@ -369,7 +369,7 @@ sub old_service {
   }
 
   else {
-    Rex::Logger::info("Execution action $action on $service.");
+    Rex::Logger::info("Executing action $action on $service.");
     $srvc->action( $service, $action );
     $changed = 100;
   }
@@ -388,9 +388,9 @@ sub old_service {
   return $return;
 }
 
-=item service_provider_for $os => $type;
+=head2 service_provider_for $os => $type;
 
-To set an other service provider as the default, use this function.
+To set another service provider as the default, use this function.
 
  user "root";
 
@@ -410,9 +410,5 @@ sub service_provider_for {
   Rex::Logger::debug("setting service provider for $os to $provider");
   Rex::Config->set( "service_provider", { $os => $provider } );
 }
-
-=back
-
-=cut
 
 1;

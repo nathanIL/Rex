@@ -52,24 +52,30 @@ Version <= 1.0: All these functions will not be reported.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::DB;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use DBI;
+our $VERSION = '9999.99.99_99'; # VERSION
+
+BEGIN {
+  use Rex::Require;
+  DBI->require;
+}
+
 use Rex::Logger;
 use Data::Dumper;
+use Symbol;
 
 use vars qw(@EXPORT $dbh);
 
 @EXPORT = qw(db);
 
-=item db
+=head2 db
 
 Do a database action.
 
@@ -193,17 +199,13 @@ sub db {
 
 }
 
-=back
-
-=cut
-
 sub import {
 
   my ( $class, $opt ) = @_;
 
   if ($opt) {
     $dbh = DBI->connect(
-      $opt->{"dsn"}, $opt->{"user"},
+      $opt->{"dsn"},            $opt->{"user"},
       $opt->{"password"} || "", $opt->{"attr"}
     );
     $dbh->{mysql_auto_reconnect} = 1;
@@ -211,11 +213,10 @@ sub import {
 
   my ( $ns_register_to, $file, $line ) = caller;
 
-  no strict 'refs';
   for my $func_name (@EXPORT) {
-    *{"${ns_register_to}::$func_name"} = \&$func_name;
+    my $ref_to_function = qualify_to_ref( $func_name, $ns_register_to );
+    *{$ref_to_function} = \&$func_name;
   }
-  use strict;
 
 }
 

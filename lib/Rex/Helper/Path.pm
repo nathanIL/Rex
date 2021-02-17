@@ -6,24 +6,30 @@
 
 package Rex::Helper::Path;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use File::Spec;
-use File::Basename qw(dirname);
+our $VERSION = '9999.99.99_99'; # VERSION
+
+use Rex::Helper::File::Spec;
+use File::Basename qw(basename dirname);
 require Exporter;
 
 use base qw(Exporter);
 use vars qw(@EXPORT);
 use Cwd 'realpath';
 
-require Rex::Commands;
-require Rex::Config;
 require Rex;
+use Rex::Commands;
+require Rex::Config;
 
 use Rex::Interface::Exec;
+use Rex::Interface::Fs;
 
-@EXPORT = qw(get_file_path get_tmp_file resolv_path);
+@EXPORT = qw(get_file_path get_tmp_file resolv_path parse_path resolve_symlink);
+
+set "path_map", {};
 
 #
 # CALL: get_file_path("foo.txt", caller());
@@ -34,14 +40,48 @@ sub get_file_path {
 
   $file_name = resolv_path($file_name);
 
+  my $ends_with_slash = 0;
+  if ( $file_name =~ m/\/$/ ) {
+    $ends_with_slash = 1;
+  }
+
+  my $has_wildcard = 0;
+  my $base_name    = basename($file_name);
+
+  if ( $base_name =~ qr{\*} ) {
+    $has_wildcard = 1;
+    $file_name    = dirname($file_name);
+  }
+
+  my $fix_path = sub {
+    my ($path) = @_;
+    $path =~ s:^\./::;
+
+    if ($has_wildcard) {
+      $path = Rex::Helper::File::Spec->catfile( $path, $base_name );
+    }
+
+    if ($ends_with_slash) {
+      if ( $path !~ m/\/$/ ) {
+        return "$path/";
+      }
+    }
+
+    return $path;
+  };
+
   if ( !$caller_package ) {
     ( $caller_package, $caller_file ) = caller();
   }
 
   # check if a file in $BASE overwrites the module file
-  # first get the absoltue path to the rexfile
+  # first get the absolute path to the rexfile
 
   $::rexfile ||= $0;
+
+  if ( $caller_file =~ m|^/loader/[^/]+/__Rexfile__.pm$| ) {
+    $caller_file = $::rexfile;
+  }
 
   my @path_parts;
   if ( $^O =~ m/^MSWin/ && !Rex::is_ssh() ) {
@@ -54,12 +94,42 @@ sub get_file_path {
 
   my $real_path = join( '/', @path_parts );
 
-  if ( -e $file_name ) {
-    return $file_name;
+  my $map_setting = get("path_map");
+
+  my %path_map = (
+    map { ( ( substr( $_, -1 ) eq '/' ) ? $_ : "$_/" ) => $map_setting->{$_} }
+      keys %$map_setting
+  );
+
+  foreach my $prefix (
+    sort { length($b) <=> length($a) }
+    grep { $file_name =~ m/^$_/ } keys %path_map
+    )
+  {
+    foreach my $pattern ( @{ $path_map{$prefix} } ) {
+      my $expansion =
+        Rex::Helper::File::Spec->catfile( parse_path($pattern),
+        substr( $file_name, length($prefix) ) );
+
+      if ( -e $expansion ) {
+        return $fix_path->($expansion);
+      }
+
+      $expansion = Rex::Helper::File::Spec->catfile( $real_path, $expansion );
+      if ( -e $expansion ) {
+        return $fix_path->($expansion);
+      }
+    }
   }
 
-  if ( -e $real_path . '/' . $file_name ) {
-    return $real_path . '/' . $file_name;
+  if ( -e $file_name ) {
+    return $fix_path->($file_name);
+  }
+
+  my $cat_file_name =
+    Rex::Helper::File::Spec->catfile( $real_path, $file_name );
+  if ( -e $cat_file_name ) {
+    return $fix_path->($cat_file_name);
   }
 
   # walk down the wire to find the file...
@@ -72,21 +142,23 @@ sub get_file_path {
     }
 
     my $module_path = Rex::get_module_path($caller_package);
-    if ( -e "$module_path/$file_name" ) {
-      $file_name = "$module_path/$file_name";
-      return $file_name;
+    $cat_file_name =
+      Rex::Helper::File::Spec->catfile( $module_path, $file_name );
+    if ( -e $cat_file_name ) {
+      return $fix_path->($cat_file_name);
     }
 
     $i++;
   }
 
-  $file_name = dirname($old_caller_file) . "/" . $file_name;
+  $file_name =
+    Rex::Helper::File::Spec->catfile( dirname($old_caller_file), $file_name );
 
-  return $file_name;
+  return $fix_path->($file_name);
 }
 
 sub get_tmp_file {
-  return File::Spec->join( Rex::Config->get_tmp_dir(),
+  return Rex::Helper::File::Spec->join( Rex::Config->get_tmp_dir(),
     Rex::Commands::get_random( 12, 'a' .. 'z' ) . '.tmp' );
 }
 
@@ -140,6 +212,60 @@ sub resolv_path {
   }
 
   return $path;
+}
+
+sub parse_path {
+  my ( $path_with_macro, $replacement_for ) = @_;
+
+  my $replace_macros = sub {
+    my ( $path, $substitution_for ) = @_;
+
+    my $macro = join q(|), keys %{$substitution_for};
+
+    ( my $substitution = $path ) =~ s/{($macro)}/$substitution_for->{$1}/gmsx;
+
+    return $substitution;
+  };
+
+  $replacement_for->{server}      //= Rex::Commands::connection()->server;
+  $replacement_for->{environment} //= Rex::Commands::environment();
+
+  my $replacement_path =
+    $replace_macros->( $path_with_macro, $replacement_for );
+
+  if ( $replacement_path =~ m/\{([^\}]+)\}/ ) {
+
+    # if there are still some macros to replace, we need some
+    # information of the system
+
+    require Rex::Commands::Gather;
+    my %hw = Rex::Commands::Gather::get_system_information();
+
+    $replacement_path = $replace_macros->( $replacement_path, \%hw );
+  }
+
+  return $replacement_path;
+}
+
+sub resolve_symlink {
+  my $path = shift;
+  my $fs   = Rex::Interface::Fs::create();
+  my $resolution;
+
+  if ( $fs->is_symlink($path) ) {
+    while ( my $link = $fs->readlink($path) ) {
+      if ( $link !~ m/^\// ) {
+        $path = dirname($path) . "/" . $link;
+      }
+      else {
+        $path = $link;
+      }
+      $link = $fs->readlink($link);
+    }
+    $resolution = $path;
+  }
+
+  return $resolution;
 }
 
 1;

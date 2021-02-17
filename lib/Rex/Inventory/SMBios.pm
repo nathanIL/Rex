@@ -6,8 +6,11 @@
 
 package Rex::Inventory::SMBios;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Data::Dumper;
 use Rex::Logger;
@@ -113,7 +116,7 @@ sub get_memory_arrays {
 sub _read_smbios {
   my ($self) = @_;
 
-  my @data = i_run("smbios");
+  my @data = i_run( "smbios", fail_ok => 1 );
 
   my ( $current_section, %section, $key, $val, %cur_data );
   for my $line (@data) {

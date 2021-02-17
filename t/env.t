@@ -1,15 +1,12 @@
-use Test::More tests => 2;
+use Test::More tests => 1;
 
-use_ok 'Rex::Commands::Run';
+use Rex::Commands::Run;
 
 $::QUIET = 1;
 
-Rex::Commands::Run->import;
+SKIP: {
+  skip 'Do not run tests on Windows', 1 if $^O =~ m/^MSWin/;
 
-if ( $^O =~ m/^MSWin/ ) {
-  ok( 1 == 1, "skipped for winfows" );
-}
-else {
-  my $s = run( "printenv REX", env => { 'REX' => 'XER' } );
-  ok( $s =~ m/XER/, "run with env" );
+  my $s = run( q(perl -e 'print $ENV{REX}'), env => { 'REX' => 'XER' } );
+  like( $s, qr/XER/, "run with env" );
 }

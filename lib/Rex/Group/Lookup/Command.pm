@@ -22,14 +22,15 @@ With this module you can define hostgroups out of a command.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Group::Lookup::Command;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 require Rex::Exporter;
 use Rex -base;
@@ -56,7 +57,7 @@ sub lookup_command {
   }
 
   eval {
-    open( my $command_rt, "$command_to_exec |" ) or die($!);
+    open( my $command_rt, "-|", "$command_to_exec" ) or die($!);
     @content = grep { !/^\s*$|^#/ } <$command_rt>;
     close($command_rt);
 
@@ -65,9 +66,5 @@ sub lookup_command {
   Rex::Logger::info("You must give a valid command.") unless $#content;
   return @content;
 }
-
-=back
-
-=cut
 
 1;

@@ -6,14 +6,17 @@
 
 package Rex::Service;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Config;
-use Rex::Commands::Run;
 use Rex::Commands::Gather;
 use Rex::Hardware;
 use Rex::Hardware::Host;
+use Rex::Helper::Run;
 use Rex::Logger;
 
 my %SERVICE_PROVIDER;
@@ -26,8 +29,14 @@ sub register_service_provider {
 
 sub get {
 
-  my $operatingsystem   = Rex::Hardware::Host->get_operating_system();
-  my $can_run_systemctl = can_run("systemctl");
+  my $operatingsystem = Rex::Hardware::Host->get_operating_system();
+
+  i_run "systemctl --no-pager > /dev/null", fail_ok => 1;
+  my $can_run_systemctl = $? == 0 ? 1 : 0;
+
+  i_run "initctl version | grep upstart", fail_ok => 1;
+  my $running_upstart = $? == 0 ? 1 : 0;
+
   my $class;
 
   $class = "Rex::Service::" . $operatingsystem;
@@ -48,8 +57,27 @@ sub get {
   elsif ( is_gentoo($operatingsystem) && $can_run_systemctl ) {
     $class = "Rex::Service::Gentoo::systemd";
   }
+  elsif ( is_gentoo($operatingsystem) ) {
+    $class = "Rex::Service::Gentoo";
+  }
   elsif ( is_mageia($operatingsystem) && $can_run_systemctl ) {
     $class = "Rex::Service::Mageia::systemd";
+  }
+  elsif ( is_debian($operatingsystem) && $can_run_systemctl ) {
+
+    # this also counts for Ubuntu and LinuxMint
+    $class = "Rex::Service::Debian::systemd";
+  }
+  elsif ( is_debian($operatingsystem) && $running_upstart ) {
+
+    # this is mainly Ubuntu with upstart
+    $class = "Rex::Service::Ubuntu";
+  }
+  elsif ( is_debian($operatingsystem) ) {
+    $class = "Rex::Service::Debian";
+  }
+  elsif ( is_arch($operatingsystem) && $can_run_systemctl ) {
+    $class = "Rex::Service::Arch::systemd";
   }
 
   my $provider_for = Rex::Config->get("service_provider") || {};

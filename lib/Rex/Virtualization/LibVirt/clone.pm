@@ -6,11 +6,13 @@
 
 package Rex::Virtualization::LibVirt::clone;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
-use Rex::Commands::Run;
 use Rex::Helper::Run;
 
 use XML::Simple;
@@ -28,8 +30,10 @@ sub execute {
     die("You have to define the new vm name!");
   }
 
+  my $connect = Rex::Config->get('virtualization')->{connect};
+
   i_run
-    "/usr/bin/virt-clone --connect qemu:///system -o '$vmname' -n '$newname' --auto-clone";
+    "/usr/bin/virt-clone --connect '$connect' -o '$vmname' -n '$newname' --auto-clone";
 }
 
 1;

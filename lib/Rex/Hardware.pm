@@ -21,20 +21,21 @@ This module is the base class for hardware/information gathering.
 
 =head1 CLASS METHODS
 
-=over 4
-
 =cut
 
 package Rex::Hardware;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 
 require Rex::Args;
 
-=item get(@modules)
+=head2 get(@modules)
 
 Returns a hash with the wanted information.
 
@@ -114,9 +115,5 @@ sub get {
 
   return %hardware_information;
 }
-
-=back
-
-=cut
 
 1;

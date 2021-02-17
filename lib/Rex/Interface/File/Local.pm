@@ -6,8 +6,11 @@
 
 package Rex::Interface::File::Local;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Interface::File::Base;
 use base qw(Rex::Interface::File::Base);
@@ -42,6 +45,9 @@ sub read {
 
 sub write {
   my ( $self, $buf ) = @_;
+
+  utf8::encode($buf)
+    if Rex::Config->get_write_utf8_files && utf8::is_utf8($buf);
 
   my $fh = $self->{fh};
   print $fh $buf;

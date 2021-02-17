@@ -6,8 +6,11 @@
 
 package Rex::Virtualization::LibVirt::create;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Commands::Gather;
@@ -66,10 +69,10 @@ sub execute {
     die("Hypervisor not supported.");
   }
 
-  my $fp = Rex::File::Parser::Data->new( data => \@data );
+  my $fp         = Rex::File::Parser::Data->new( data => \@data );
   my $create_xml = $fp->read("create-${virt_type}.xml");
 
-  my $template = Rex::Template->new;
+  my $template        = Rex::Template->new;
   my $parsed_template = $template->parse( $create_xml, $opts );
 
   Rex::Logger::debug($parsed_template);
@@ -81,7 +84,8 @@ sub execute {
       my $size = $_->{'size'};
       if ( !is_file( $_->{"file"} ) ) {
         Rex::Logger::debug("creating storage disk: \"$_->{file}\"");
-        i_run "$QEMU_IMG create -f raw $_->{'file'} $size";
+        i_run "$QEMU_IMG create -f $_->{driver_type} '$_->{file}' $size",
+          fail_ok => 1;
         if ( $? != 0 ) {
           die("Error creating storage disk: $_->{'file'}");
         }
@@ -95,7 +99,9 @@ sub execute {
         "building domain: \"$opts->{'name'}\" from template: \"$_->{'template'}\""
       );
       Rex::Logger::info("Please wait ...");
-      i_run "$QEMU_IMG convert -f raw $_->{'template'} -O raw $_->{'file'}";
+      i_run
+        "$QEMU_IMG convert -f raw '$_->{template}' -O '$_->{driver_type}' '$_->{file}'",
+        fail_ok => 1;
       if ( $? != 0 ) {
         die(
           "Error building domain: \"$opts->{'name'}\" from template: \"$_->{'template'}\"\n
@@ -116,11 +122,11 @@ sub execute {
 
   file "$file_name", content => $parsed_template;
 
-  i_run "virsh -c $uri define $file_name";
-  unlink($file_name);
+  i_run "virsh -c $uri define '$file_name'", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error defining vm $opts->{name}");
   }
+  unlink($file_name);
 
   return;
 }
@@ -150,11 +156,11 @@ sub _set_defaults {
 
   }
 
-  if ( !exists $opts->{"memory"} ) {
+  if ( !$opts->{"memory"} ) {
     $opts->{"memory"} = 512 * 1024;
   }
 
-  if ( !exists $opts->{"cpus"} ) {
+  if ( !$opts->{"cpus"} ) {
     $opts->{"cpus"} = 1;
   }
 
@@ -416,6 +422,9 @@ __DATA__
   <name><%= $::name %></name>
   <memory><%= $::memory %></memory>
   <currentMemory><%= $::memory %></currentMemory>
+  <% if(exists $::cpu->{mode}) { %>
+   <cpu mode="<%= $::cpu->{mode} %>" />
+  <% } %>
   <vcpu><%= $::cpus %></vcpu>
   <os>
    <type arch="<%= $::arch %>">hvm</type>
@@ -468,6 +477,17 @@ __DATA__
    <serial type="pty">
     <target port="0"/>
    </serial>
+   <% my $serial_i = 1; %>
+   <% for my $serial (@{ $serial_devices }) { %>
+   <% if($serial->{type} eq "tcp") { %>
+   <serial type='<%= $serial->{type} %>'>
+     <source mode='bind' host='<%= $serial->{host} %>' service='<%= $serial->{port} %>'/>
+     <protocol type='raw'/>
+     <target port='<%= $serial_i %>'/>
+   </serial>
+   <% } %>
+   <% $serial_i++; %>
+   <% } %>
    <console type="pty">
     <target port="0"/>
    </console>

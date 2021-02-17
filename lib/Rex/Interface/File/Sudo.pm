@@ -6,8 +6,11 @@
 
 package Rex::Interface::File::Sudo;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Fcntl;
 use File::Basename;
@@ -42,6 +45,9 @@ sub open {
     $self->{fh} = Rex::Interface::File->create("Local");
   }
 
+  # always use current logged in user for sudo fs operations
+  Rex::get_current_connection_object()->push_sudo_options( {} );
+
   $self->{mode}    = $mode;
   $self->{file}    = $file;
   $self->{rndfile} = get_tmp_file;
@@ -67,6 +73,8 @@ sub open {
 
   $self->{fh}->open( $mode, $self->{rndfile} );
 
+  Rex::get_current_connection_object()->pop_sudo_options();
+
   return $self->{fh};
 }
 
@@ -78,6 +86,10 @@ sub read {
 
 sub write {
   my ( $self, $buf ) = @_;
+
+  utf8::encode($buf)
+    if Rex::Config->get_write_utf8_files && utf8::is_utf8($buf);
+
   $self->{fh}->write($buf);
 }
 
@@ -91,9 +103,15 @@ sub close {
 
   return unless $self->{fh};
 
+  # always use current logged in user for sudo fs operations
+  Rex::get_current_connection_object()->push_sudo_options( {} );
+
+  $self->{fh}->close;
+
   if ( exists $self->{mode}
     && ( $self->{mode} eq ">" || $self->{mode} eq ">>" ) )
   {
+
     my $exec = Rex::Interface::Exec->create;
     if ( $self->{file_stat} ) {
       my %stat = $self->_fs->stat( $self->{file} );
@@ -106,10 +124,11 @@ sub close {
     #$exec->exec("cat " . $self->{rndfile} . " >'" . $self->{file} . "'");
   }
 
-  $self->{fh}->close;
   $self->{fh} = undef;
 
   $self->_fs->unlink( $self->{rndfile} );
+
+  Rex::get_current_connection_object()->pop_sudo_options();
 
   $self = undef;
 }

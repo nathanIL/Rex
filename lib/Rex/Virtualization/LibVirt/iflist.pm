@@ -6,12 +6,13 @@
 
 package Rex::Virtualization::LibVirt::iflist;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
-use Rex::Commands::Run;
-use Rex::Helper::Run;
 
 use Data::Dumper;
 use Rex::Virtualization::LibVirt::dumpxml;
@@ -51,41 +52,3 @@ sub execute {
 
 1;
 
-__END__
-
-  print Dumper($ref);
-return;
-  Rex::Logger::debug("Getting interface list of domain: $vmname");
-
-  my @iflist = i_run "virsh domiflist $vmname";
-
-  if($? != 0) {
-    die("Error running virsh domiflist $vmname");
-  }
-
-  my ($k, $v);
-
-  shift @iflist;
-  shift @iflist;
-  my $iface_num = 0;
-  for my $line (@iflist) {
-    my ($interface, $type, $source, $model, $mac) = split(/\s+/, $line);
-
-    if($interface eq "-") {
-      $interface = "vnet$iface_num";
-    }
-
-    $ret{$interface} = {
-      type => $type,
-      source => $source,
-      model => $model,
-      mac => $mac
-    };
-
-    $iface_num++;
-  }
-
-  return \%ret;
-}
-
-1;

@@ -6,28 +6,35 @@
 
 package Rex::Group::Entry::Server;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::System;
 use Rex::Config;
 use Rex::Interface::Exec;
 use Data::Dumper;
+use Sort::Naturally;
+use Symbol;
+
+use List::Util 1.45 qw(uniq);
 
 use overload
-  'eq' => sub { shift->is_eq(@_); },
-  'ne' => sub { shift->is_ne(@_); },
-  '""' => sub { shift->to_s(@_); };
+  'eq'  => sub { shift->is_eq(@_); },
+  'ne'  => sub { shift->is_ne(@_); },
+  '""'  => sub { shift->to_s(@_); },
+  'cmp' => sub { shift->compare(@_); };
 
 use attributes;
 
 sub function {
   my ( $class, $name, $code ) = @_;
 
-  no strict "refs";
-  *{ $class . "::" . $name } = $code;
-  use strict;
+  my $ref_to_function = qualify_to_ref( $name, $class );
+  *{$ref_to_function} = $code;
 }
 
 sub new {
@@ -38,7 +45,6 @@ sub new {
   bless( $self, $proto );
 
   # be save check if name is already a server ref
-
   if ( ref $self->{name} eq __PACKAGE__ ) {
     return $self->{name};
   }
@@ -84,17 +90,21 @@ sub new {
     delete $self->{auth_type};
   }
 
+  if ( !ref $self->{__group__} ) {
+    $self->{__group__} = [];
+  }
+
   return $self;
 }
 
 sub get_servers {
   my ($self) = @_;
-  return map {
-    if ( ref($_) ne "Rex::Group::Entry::Server" ) {
-      $_ = Rex::Group::Entry::Server->new( name => $_, auth => $self->{auth} );
+  return uniq map {
+    if ( ref $_ && $_->isa("Rex::Group::Entry::Server") ) {
+      $_;
     }
     else {
-      $_;
+      Rex::Group::Entry::Server->new( name => $_, auth => $self->{auth} );
     }
   } $self->evaluate_hostname;
 }
@@ -116,6 +126,11 @@ sub is_ne {
   if ( $comp ne $self->to_s ) {
     return 1;
   }
+}
+
+sub compare {
+  my ( $self, $comp ) = @_;
+  return ncmp( $self->to_s, $comp->to_s );
 }
 
 sub has_auth {
@@ -174,6 +189,9 @@ sub get_public_key {
   my ($self) = @_;
 
   if ( exists $self->{auth}->{public_key} && -f $self->{auth}->{public_key} ) {
+    Rex::Logger::debug(
+      "Rex::Group::Entry::Server (public_key): returning $self->{auth}->{public_key}"
+    );
     return $self->{auth}->{public_key};
   }
 
@@ -181,16 +199,24 @@ sub get_public_key {
     && Rex::Config->get_ssh_config_public_key( server => $self->to_s ) )
   {
     Rex::Logger::debug("Checking for a public key in .ssh/config");
-    return Rex::Config->get_ssh_config_public_key( server => $self->to_s );
+    my $key = Rex::Config->get_ssh_config_public_key( server => $self->to_s );
+    Rex::Logger::debug(
+      "Rex::Group::Entry::Server (public_key): returning $key");
+    return $key;
   }
 
+  Rex::Logger::debug( "Rex::Group::Entry::Server (public_key): returning "
+      . ( Rex::Config->get_public_key || "" ) );
   return Rex::Config->get_public_key;
 }
 
 sub get_private_key {
   my ($self) = @_;
 
-  if ( exists $self->{auth}->{private_key} && -f $self->{auth}->{public_key} ) {
+  if ( exists $self->{auth}->{private_key} && -f $self->{auth}->{private_key} )
+  {
+    Rex::Logger::debug( "Rex::Group::Entry::Server (private_key): returning "
+        . $self->{auth}->{private_key} );
     return $self->{auth}->{private_key};
   }
 
@@ -198,9 +224,14 @@ sub get_private_key {
     && Rex::Config->get_ssh_config_private_key( server => $self->to_s ) )
   {
     Rex::Logger::debug("Checking for a private key in .ssh/config");
-    return Rex::Config->get_ssh_config_private_key( server => $self->to_s );
+    my $key = Rex::Config->get_ssh_config_private_key( server => $self->to_s );
+    Rex::Logger::debug(
+      "Rex::Group::Entry::Server (private_key): returning " . $key );
+    return $key;
   }
 
+  Rex::Logger::debug( "Rex::Group::Entry::Server (private_key): returning "
+      . ( Rex::Config->get_private_key || "" ) );
   return Rex::Config->get_private_key;
 }
 
@@ -273,13 +304,30 @@ sub merge_auth {
     }
 
     # other_auth has presedence
-    if ( exists $other_auth->{$key} && Rex::Config->get_use_server_auth() == 0 )
+    if ( exists $other_auth->{$key}
+      && defined $other_auth->{$key}
+      && Rex::Config->get_use_server_auth() == 0 )
     {
       $new_auth{$key} = $other_auth->{$key};
     }
   }
 
   return %new_auth;
+}
+
+sub append_to_group {
+  my ( $self, $group ) = @_;
+  push @{ $self->{__group__} }, $group;
+}
+
+sub group {
+  my ($self) = @_;
+  return $self->groups;
+}
+
+sub groups {
+  my ($self) = @_;
+  return @{ $self->{__group__} };
 }
 
 sub option {
@@ -315,7 +363,7 @@ sub AUTOLOAD {
     return $self->{$wanted_data};
   }
 
-  return undef;
+  return;
 }
 
 sub evaluate_hostname {
@@ -334,15 +382,8 @@ sub evaluate_hostname {
 
 sub test_perl {
   my ($self) = @_;
-
   my $exec = Rex::Interface::Exec->create;
-  $exec->exec("which perl");
-
-  if ( $? != 0 ) {
-    return 0;
-  }
-
-  return 1;
+  return $exec->can_run( ["perl"] ); # use a new anon ref, so that we don't have drawbacks if some lower layers will manipulate things.
 }
 
 1;

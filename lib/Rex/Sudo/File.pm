@@ -8,12 +8,15 @@
 
 package Rex::Sudo::File;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex;
 use Rex::Commands;
-use Rex::Commands::Run;
+use Rex::Helper::Run;
 use Rex::Commands::Fs;
 use Rex::Helper::Path;
 use IO::File;
@@ -101,7 +104,7 @@ sub close {
 
   # use cat to not overwrite attributes/owner/group
   if ( $self->{mode} eq ">" || $self->{mode} eq ">>" ) {
-    run "cat " . $self->{rndfile} . " >" . $self->{file};
+    i_run "cat " . $self->{rndfile} . " >" . $self->{file};
     rm( $self->{rndfile} );
   }
 }

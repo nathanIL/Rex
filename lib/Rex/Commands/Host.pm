@@ -23,17 +23,17 @@ With this module you can manage the host entries in /etc/hosts.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Host;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 require Rex::Exporter;
-use Rex::Commands::Run;
 use Rex::Commands::Fs;
 use Rex::Commands::File;
 use Rex::Commands::MD5;
@@ -45,7 +45,7 @@ use base qw(Rex::Exporter);
 
 @EXPORT = qw(create_host get_host delete_host host_entry);
 
-=item host_entry($name, %option)
+=head2 host_entry($name, %option)
 
 Manages the entries in /etc/hosts.
 
@@ -104,7 +104,7 @@ sub host_entry {
     ->report_resource_end( type => "host_entry", name => $res_name );
 }
 
-=item create_host($)
+=head2 create_host($)
 
 Update or create a /etc/hosts entry.
 
@@ -138,10 +138,9 @@ sub create_host {
     $fh->close;
   }
   else {
-    my @host = get_host( $host, { file => $data->{file} } );
-    if ( $data->{"ip"} eq $host[0]->{"ip"}
+    if ( $data->{"ip"} eq $cur_host[0]->{"ip"}
       && join( " ", @{ $data->{"aliases"} || [] } ) eq
-      join( " ", @{ $host[0]->{"aliases"} } ) )
+      join( " ", @{ $cur_host[0]->{"aliases"} } ) )
     {
 
       Rex::Logger::debug("Nothing to update for host $host");
@@ -155,7 +154,7 @@ sub create_host {
   }
 }
 
-=item delete_host($host)
+=head2 delete_host($host)
 
 Delete a host from /etc/hosts.
 
@@ -174,7 +173,7 @@ sub delete_host {
     my @content = $fh->read_all;
     $fh->close;
 
-    my @new_content = grep { !/\s$host\s?/ } @content;
+    my @new_content = grep { !/\s\Q$host\E\b/ } @content;
 
     $fh = file_write $file;
     $fh->write(@new_content);
@@ -185,7 +184,7 @@ sub delete_host {
   }
 }
 
-=item get_host($host)
+=head2 get_host($host)
 
 Returns the information of $host in /etc/hosts.
 
@@ -252,9 +251,5 @@ sub _parse_hosts {
 
   return @ret;
 }
-
-=back
-
-=cut
 
 1;

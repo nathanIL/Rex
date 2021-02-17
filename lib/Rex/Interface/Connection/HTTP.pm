@@ -6,14 +6,18 @@
 
 package Rex::Interface::Connection::HTTP;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Interface::Connection::Base;
+
 BEGIN {
   LWP::UserAgent->use;
-  JSON::XS->use;
-};
+  JSON::MaybeXS->use;
+}
 
 use Data::Dumper;
 

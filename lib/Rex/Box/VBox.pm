@@ -80,23 +80,25 @@ It is also possible to run VirtualBox in headless mode. This only works on Linux
 
 See also the Methods of Rex::Box::Base. This module inherits all methods of it.
 
-=over 4
-
 =cut
 
 package Rex::Box::VBox;
 
+use 5.010001;
+use strict;
+use warnings;
 use Data::Dumper;
 use Rex::Box::Base;
 use Rex::Commands -no => [qw/auth/];
-use Rex::Commands::Run;
 use Rex::Commands::Fs;
 use Rex::Commands::Virtualization;
 use Rex::Commands::SimpleCheck;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 BEGIN {
   LWP::UserAgent->use;
-};
+}
 
 use Time::HiRes qw(tv_interval gettimeofday);
 use File::Basename qw(basename);
@@ -111,7 +113,7 @@ $|++;
 # BEGIN of class methods
 ################################################################################
 
-=item new(name => $vmname)
+=head2 new(name => $vmname)
 
 Constructor if used in OO mode.
 
@@ -132,6 +134,8 @@ sub new {
   {
     set virtualization => { type => "VBox", headless => TRUE };
   }
+
+  $self->{get_ip_count} = 0;
 
   return $self;
 }
@@ -185,7 +189,7 @@ sub import_vm {
           Rex::Logger::debug( "Setting network bridge (dev: $nic_no) to: "
               . ( $option->{$nic_no}->{bridge} || "eth0" ) );
           vm
-            option => $self->{name},
+            option                 => $self->{name},
             "bridgeadapter$nic_no" =>
             ( $option->{$nic_no}->{bridge} || "eth0" );
         }
@@ -222,21 +226,6 @@ sub import_vm {
   $self->{info} = vm guestinfo => $self->{name};
 }
 
-sub provision_vm {
-  my ( $self, @tasks ) = @_;
-
-  if ( !@tasks ) {
-    @tasks = @{ $self->{__tasks} };
-  }
-
-  $self->wait_for_ssh();
-
-  for my $task (@tasks) {
-    Rex::TaskList->create()->get_task($task)->set_auth( %{ $self->{__auth} } );
-    Rex::TaskList->create()->get_task($task)->run( $self->ip );
-  }
-}
-
 sub select_bridge {
   my $bridges = vm "bridge";
 
@@ -267,7 +256,7 @@ sub select_bridge {
   return $ifname;
 }
 
-=item share_folder(%option)
+=head2 share_folder(%option)
 
 Creates a shared folder inside the VM with the content from a folder from the Host machine. This only works with VirtualBox.
 
@@ -283,7 +272,7 @@ sub share_folder {
   $self->{__shared_folder} = \%option;
 }
 
-=item info
+=head2 info
 
 Returns a hashRef of vm information.
 
@@ -309,7 +298,7 @@ sub info {
   return $self->{info};
 }
 
-=item ip
+=head2 ip
 
 This method return the ip of a vm on which the ssh daemon is listening.
 
@@ -318,7 +307,9 @@ This method return the ip of a vm on which the ssh daemon is listening.
 sub ip {
   my ($self) = @_;
 
-  $self->{info} = vm guestinfo => $self->{name};
+  $self->{info} ||= vm guestinfo => $self->{name};
+
+  if ( scalar keys %{ $self->{info} } == 0 ) { return; }
 
   my $server = $self->{info}->{net}->[0]->{ip};
   if ( $self->{__forward_port}
@@ -336,11 +327,22 @@ sub ip {
 
   $self->{info}->{ip} = $server;
 
+  if ( !$server ) {
+    sleep 1;
+    $self->{get_ip_count}++;
+
+    if ( $self->{get_ip_count} >= 30 ) {
+      die "Can't get ip of VM.";
+    }
+
+    my $ip = $self->ip;
+    if ($ip) {
+      $self->{get_ip_count} = 0;
+      return $ip;
+    }
+  }
+
   return $server;
 }
-
-=back
-
-=cut
 
 1;

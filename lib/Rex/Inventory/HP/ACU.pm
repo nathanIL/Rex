@@ -6,8 +6,11 @@
 
 package Rex::Inventory::HP::ACU;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Commands::Run;
 use Rex::Helper::Run;
@@ -15,8 +18,9 @@ use Rex::Helper::Run;
 sub get {
 
   if ( can_run("hpacucli") ) {
-    my @lines = i_run "/usr/sbin/hpacucli controller all show config detail";
-    my $ret   = parse_config(@lines);
+    my @lines = i_run "/usr/sbin/hpacucli controller all show config detail",
+      fail_ok => 1;
+    my $ret = parse_config(@lines);
     return $ret;
   }
   else {
@@ -213,7 +217,7 @@ sub V {
   return $v;
 }
 
-sub K_V($) {
+sub K_V {
   my ($line) = @_;
 
   if ( $line =~ /(.+):\s+(.+)/ ) {

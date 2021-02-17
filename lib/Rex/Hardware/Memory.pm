@@ -6,8 +6,11 @@
 
 package Rex::Hardware::Memory;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Hardware::Host;
 use Rex::Commands::Run;
@@ -52,7 +55,7 @@ sub get {
     };
   }
   elsif ( $os eq "SunOS" ) {
-    my @data = i_run "echo ::memstat | mdb -k";
+    my @data = i_run "echo ::memstat | mdb -k", fail_ok => 1;
 
     my ($free_cache) = map { /\D+\d+\s+(\d+)/ } grep { /^Free \(cache/ } @data;
     my ($free_list)  = map { /\D+\d+\s+(\d+)/ } grep { /^Free \(freel/ } @data;
@@ -75,7 +78,7 @@ sub get {
 
   }
   elsif ( $os eq "OpenBSD" ) {
-    my $mem_str   = i_run "top -d1 | grep Memory:";
+    my $mem_str   = i_run "top -d1 | grep Memory:", fail_ok => 1;
     my $total_mem = sysctl("hw.physmem");
 
     my ( $phys_mem, $p_m_ent, $virt_mem, $v_m_ent, $free, $f_ent ) =
@@ -93,7 +96,7 @@ sub get {
 
   }
   elsif ( $os eq "NetBSD" ) {
-    my $mem_str   = i_run "top -d1 | grep Memory:";
+    my $mem_str   = i_run "top -d1 | grep Memory:", fail_ok => 1;
     my $total_mem = sysctl("hw.physmem");
 
     my (
@@ -121,7 +124,7 @@ sub get {
 
   }
   elsif ( $os =~ /FreeBSD/ ) {
-    my $mem_str   = i_run "top -d1 | grep Mem:";
+    my $mem_str   = i_run "top -d1 | grep Mem:", fail_ok => 1;
     my $total_mem = sysctl("hw.physmem");
 
     my (
@@ -158,7 +161,7 @@ sub get {
     };
   }
   elsif ( $os eq "OpenWrt" ) {
-    my @data = i_run "cat /proc/meminfo";
+    my @data = i_run "cat /proc/meminfo", fail_ok => 1;
 
     my ($total)   = map { /(\d+)/ } grep { /^MemTotal:/ } @data;
     my ($free)    = map { /(\d+)/ } grep { /^MemFree:/ } @data;
@@ -188,7 +191,7 @@ sub get {
       };
     }
 
-    my $free_str = [ grep { /^Mem:/ } i_run("free -m") ]->[0];
+    my $free_str = [ grep { /^Mem:/ } i_run( "free -m", fail_ok => 1 ) ]->[0];
 
     if ( !$free_str ) {
       $data = {

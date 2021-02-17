@@ -14,7 +14,7 @@ All these functions are not idempotent.
 
 =head1 DESCRIPTION
 
-With this module you can tail a file
+With this module you can tail a file.
 
 =head1 SYNOPSIS
 
@@ -23,26 +23,30 @@ With this module you can tail a file
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Tail;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 require Rex::Exporter;
 use Data::Dumper;
 use Rex::Commands::Fs;
 use Rex::Commands::File;
 
+#use Rex::Helper::Run;
+use Rex::Commands::Run;
+
 use vars qw(@EXPORT);
 use base qw(Rex::Exporter);
 
 @EXPORT = qw(tail);
 
-=item tail($file)
+=head2 tail($file)
 
 This function will tail the given file.
 
@@ -50,7 +54,7 @@ This function will tail the given file.
    tail "/var/log/syslog";
  };
 
-Or, if you want to format the output by yourself, you can define a callback function.
+If you want to control the output format, you can define a callback function:
 
  task "syslog", "server01", sub {
    tail "/var/log/syslog", sub {
@@ -70,67 +74,17 @@ sub tail {
   my $file     = shift;
   my $callback = shift;
 
-  if ( Rex::is_sudo() ) {
-    die("Can't use tail within sudo environment.");
-  }
+  $callback ||= sub {
+    print $_[0];
+  };
 
   Rex::Logger::debug("Tailing: $file");
 
-  if ( my $ssh = Rex::is_ssh() ) {
-    my %stat      = stat $file;
-    my $orig_size = $stat{'size'};
-    my $new_pos   = $stat{'size'} - 1024;
-    if ( $new_pos < 0 ) { $new_pos = 0; }
-
-    my %new_stat;
-    my $old_pos;
-    while (1) {
-      if ( !%new_stat || $new_stat{'size'} > $stat{'size'} ) {
-        my $fh = file_read $file;
-        unless ($fh) {
-          die("Error opening $file for reading");
-        }
-        my $data;
-
-        if ( !%new_stat ) {
-          $fh->seek( $stat{'size'} - 1024 );
-          $data = $fh->read(1024);
-        }
-        else {
-          $fh->seek($old_pos);
-          $data = $fh->read( $new_stat{'size'} - $old_pos );
-        }
-
-        my @lines = split( /\n/, $data );
-        shift @lines unless $old_pos;
-
-        if ($callback) {
-          for my $line (@lines) {
-            &$callback($line);
-          }
-        }
-        else {
-          print join( "\n", @lines ) . "\n";
-        }
-
-        $fh->close;
-        $old_pos = $new_stat{'size'};
-      }
-
-      select undef, undef, undef, 0.3;
-      %stat = %new_stat if %new_stat;
-      %new_stat = stat $file;
-    }
-
-  }
-  else {
-    system("tail -f $file");
-  }
+  run "tail -f $file", continuous_read => sub {
+    $callback->(@_);
+    },
+    ;
 
 }
-
-=back
-
-=cut
 
 1;

@@ -6,8 +6,11 @@
 
 package Rex::Hardware::Network::Linux;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::Run;
@@ -16,8 +19,13 @@ use Rex::Helper::Array;
 use Data::Dumper;
 
 sub get_bridge_devices {
+  unless ( can_run("brctl") ) {
+    Rex::Logger::debug("No brctl available");
+    return {};
+  }
+
   local $/ = "\n";
-  my @lines = i_run 'brctl show';
+  my @lines = i_run 'brctl show', fail_ok => 1;
   chomp @lines;
   shift @lines;
 
@@ -44,7 +52,7 @@ sub get_bridge_devices {
 sub get_network_devices {
 
   my $command = can_run('ip') ? 'ip addr show' : 'ifconfig -a';
-  my @output = i_run("$command");
+  my @output  = i_run( "$command", fail_ok => 1 );
 
   my $devices =
     ( $command eq 'ip addr show' )
@@ -60,7 +68,7 @@ sub get_network_configuration {
   my $device_info = {};
 
   my $command = can_run('ip') ? 'ip addr show' : 'ifconfig -a';
-  my @output = i_run("$command");
+  my @output  = i_run( "$command", fail_ok => 1 );
 
   my $br_data = get_bridge_devices();
 
@@ -160,11 +168,12 @@ sub _parse_ip {
     }
 
     # loopback
-    if ( $line =~ m/^\s*inet (\d+\.\d+\.\d+\.\d+)\/(\d+) scope host lo/ ) {
-      $dev->{$cur_dev}->{ip}      = $1;
-      $dev->{$cur_dev}->{netmask} = _convert_cidr_prefix($2);
-    }
+    #    if ( $line =~ m/^\s*inet (\d+\.\d+\.\d+\.\d+)\/(\d+) scope host lo/ ) {
+    #      $dev->{$cur_dev}->{ip}      = $1;
+    #      $dev->{$cur_dev}->{netmask} = _convert_cidr_prefix($2);
+    #    }
 
+    my $sec_i = 1;
     if ( $line =~
       m/^\s*inet (\d+\.\d+\.\d+\.\d+)\/(\d+) (brd (\d+\.\d+\.\d+\.\d+) )?scope ([^\s]+) (\w+\s)?(.+?)$/
       )
@@ -183,6 +192,16 @@ sub _parse_ip {
         $dev->{$dev_name}->{broadcast} = $broadcast;
         $dev->{$dev_name}->{netmask}   = _convert_cidr_prefix($cidr_prefix);
         $dev->{$dev_name}->{mac}       = $dev->{$cur_dev}->{mac};
+      }
+      elsif ( $dev_name eq $cur_dev && $dev->{$cur_dev}->{ip} ) {
+
+        # there is already an ip address, so this must be a secondary
+        $dev->{"${dev_name}_${sec_i}"}->{ip}        = $ip;
+        $dev->{"${dev_name}_${sec_i}"}->{broadcast} = $broadcast;
+        $dev->{"${dev_name}_${sec_i}"}->{netmask} =
+          _convert_cidr_prefix($cidr_prefix);
+        $dev->{"${dev_name}_${sec_i}"}->{mac} = $dev->{$cur_dev}->{mac};
+        $sec_i++;
       }
       else {
         $dev->{$cur_dev}->{ip}        = $ip;
@@ -207,13 +226,13 @@ sub route {
 
   my @ret = ();
 
-  my @route = i_run "netstat -nr";
+  my @route = i_run "netstat -nr", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error running netstat");
   }
 
   shift @route;
-  shift @route;    # remove first 2 lines
+  shift @route; # remove first 2 lines
 
   for my $route_entry (@route) {
     my ( $dest, $gw, $genmask, $flags, $mss, $window, $irtt, $iface ) =
@@ -242,13 +261,13 @@ sub default_gateway {
 
   if ($new_default_gw) {
     if ( default_gateway() ) {
-      i_run "/sbin/route del default";
+      i_run "/sbin/route del default", fail_ok => 1;
       if ( $? != 0 ) {
         die("Error running route del default");
       }
     }
 
-    i_run "/sbin/route add default gw $new_default_gw";
+    i_run "/sbin/route add default gw $new_default_gw", fail_ok => 1;
     if ( $? != 0 ) {
       die("Error route add default");
     }
@@ -269,22 +288,36 @@ sub default_gateway {
 sub netstat {
 
   my @ret;
-  my @netstat = i_run "netstat -nap";
+  my @netstat = i_run "netstat -nap", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error running netstat");
   }
-  my ( $in_inet, $in_unix ) = ( 0, 0 );
+  my ( $in_inet, $in_unix, $in_unknown ) = ( 0, 0, 0 );
   for my $line (@netstat) {
     if ( $in_inet == 1 ) { ++$in_inet; next; }
     if ( $in_unix == 1 ) { ++$in_unix; next; }
     if ( $line =~ m/^Active Internet/ ) {
-      $in_inet = 1;
+      $in_inet    = 1;
+      $in_unix    = 0;
+      $in_unknown = 0;
       next;
     }
 
     if ( $line =~ m/^Active UNIX/ ) {
-      $in_inet = 0;
-      $in_unix = 1;
+      $in_inet    = 0;
+      $in_unix    = 1;
+      $in_unknown = 0;
+      next;
+    }
+
+    if ( $line =~ m/^Active/ ) {
+      $in_inet    = 0;
+      $in_unix    = 0;
+      $in_unknown = 1;
+      next;
+    }
+
+    if ($in_unknown) {
       next;
     }
 
@@ -354,8 +387,8 @@ sub netstat {
       }
 
       $state =~ s/^\s|\s$//g if ($state);
-      $flags =~ s/\s+$//;
-      $cmd =~ s/\s+$//;
+      $flags =~ s/\s+$//     if ($flags);
+      $cmd   =~ s/\s+$//;
 
       my $data = {
         proto   => $proto,
@@ -382,7 +415,7 @@ sub _convert_cidr_prefix {
   my ($cidr_prefix) = @_;
 
   # convert CIDR prefix to dotted decimal notation
-  my $binary_mask = '1' x $cidr_prefix . '0' x ( 32 - $cidr_prefix );
+  my $binary_mask         = '1' x $cidr_prefix . '0' x ( 32 - $cidr_prefix );
   my $dotted_decimal_mask = join '.', unpack 'C4', pack 'B32', $binary_mask;
 
   return $dotted_decimal_mask;

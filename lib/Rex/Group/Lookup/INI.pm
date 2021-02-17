@@ -6,28 +6,28 @@
 
 =head1 NAME
 
-Rex::Group::Lookup::INI - read hostnames and groups from a INI style file
+Rex::Group::Lookup::INI - read host names and groups from an INI style file
 
 =head1 DESCRIPTION
 
-With this module you can define hostgroups out of an ini style file.
+With this module you can define host groups in an INI style file.
 
 =head1 SYNOPSIS
 
  use Rex::Group::Lookup::INI;
- groups_file "file.ini";
- 
+ groups_file 'file.ini';
 
 =head1 EXPORTED FUNCTIONS
-
-=over 4
 
 =cut
 
 package Rex::Group::Lookup::INI;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex -base;
 
@@ -39,22 +39,34 @@ use Rex::Helper::INI;
 
 @EXPORT = qw(groups_file);
 
-=item groups_file($file)
+=head2 groups_file($file)
 
-With this function you can read groups from ini style files.
+With this function you can read groups from INI style files.
 
-File Example:
+File example:
 
- [webserver]
+ # servers.ini
+ [webservers]
  fe01
  fe02
- f03
     
  [backends]
- be01
- be02
- 
- groups_file($file);
+ be[01..03]
+
+It supports the same expressions as the L<group|Rex::Commands/group> command.
+
+Since 0.42, it also supports custom host properties if the L<use_server_auth|Rex/use_server_auth> feature flag is enabled:
+
+ # servers.ini
+ [webservers]
+ server01 user=root password=foob4r sudo=true services=apache,memcache
+
+ # Rexfile
+ use Rex -feature => ['use_server_auth'];
+
+ task 'list_services', group => 'webservers', sub {
+   say connection->server->option('services');
+ }
 
 =cut
 
@@ -64,7 +76,7 @@ sub groups_file {
   my $section;
   my %hash;
 
-  open( my $INI, "$file" ) || die "Can't open $file: $!\n";
+  open( my $INI, "<", "$file" ) || die "Can't open $file: $!\n";
   my @lines = <$INI>;
   chomp @lines;
   close($INI);
@@ -88,9 +100,5 @@ sub groups_file {
     group( "$k" => @servers );
   }
 }
-
-=back
-
-=cut
 
 1;

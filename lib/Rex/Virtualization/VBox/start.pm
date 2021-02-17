@@ -6,8 +6,11 @@
 
 package Rex::Virtualization::VBox::start;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::Run;
@@ -82,10 +85,10 @@ exit;
 
 EOF
 
-    i_run "perl $filename";
+    i_run "perl $filename", fail_ok => 1;
   }
   else {
-    i_run "VBoxManage startvm \"$dom\"";
+    i_run "VBoxManage startvm \"$dom\"", fail_ok => 1;
   }
 
   if ( $? != 0 ) {

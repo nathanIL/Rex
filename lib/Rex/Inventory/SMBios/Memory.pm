@@ -6,8 +6,11 @@
 
 package Rex::Inventory::SMBios::Memory;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Inventory::SMBios::Section;
 use base qw(Rex::Inventory::SMBios::Section);
@@ -21,7 +24,7 @@ __PACKAGE__->has(
     { key => 'Locator', from => "Device Locator" },
   ],
   1
-);    # is_array 1
+); # is_array 1
 
 sub new {
   my $that  = shift;

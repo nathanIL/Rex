@@ -10,8 +10,7 @@ Rex::Test::Base - Basic Test Module
 
 =head1 DESCRIPTION
 
-This module is a basic Test module to test your Code with the help of local VMs. To create a test you first have to create the "t" directory.
-Then you can create your test files inside this directory.
+This is a basic test module to test your code with the help of local VMs. You can place your tests in the "t" directory.
 
 =head1 EXAMPLE
 
@@ -49,17 +48,18 @@ Then you can create your test files inside this directory.
 
 =head1 METHODS
 
-=over 4
-
 =cut
 
 package Rex::Test::Base;
 
+use 5.010001;
 use strict;
 use warnings;
 
-#use Rex -base;
-Test::More->require;
+use base 'Test::Builder::Module';
+
+our $VERSION = '9999.99.99_99'; # VERSION
+
 require Rex::Commands;
 use Rex::Commands::Box;
 use Data::Dumper;
@@ -70,7 +70,7 @@ use base qw(Exporter);
 use vars qw(@EXPORT);
 @EXPORT = qw(test);
 
-=item new(name => $test_name)
+=head2 new(name => $test_name)
 
 Constructor if used in OO mode.
 
@@ -89,13 +89,15 @@ sub new {
 
   $self->{name} ||= $file;
   $self->{redirect_port} = 2222;
+  $self->{memory} ||= 512; # default, in MB
+  $self->{cpu}    ||= 1;   # default
 
   return $self;
 }
 
-=item name($name)
+=head2 name($name)
 
-The name of the test. For each test a new vm will be created named after $name.
+The name of the test. A VM called $name will be created for each test. If the VM already exists, Rex will try to reuse it.
 
 =cut
 
@@ -104,9 +106,31 @@ sub name {
   $self->{name} = $name;
 }
 
-=item vm_auth(%auth)
+=head2 memory($amount)
 
-Authentication option for the VM.
+The amount of memory the VM should use, in Megabytes.
+
+=cut
+
+sub memory {
+  my ( $self, $memory ) = @_;
+  $self->{memory} = $memory;
+}
+
+=head2 cpus($number)
+
+The number of CPUs the VM should use.
+
+=cut
+
+sub cpus {
+  my ( $self, $cpus ) = @_;
+  $self->{cpus} = $cpus;
+}
+
+=head2 vm_auth(%auth)
+
+Authentication options for the VM. It accepts the same parameters as C<Rex::Box::Base-E<gt>auth()>.
 
 =cut
 
@@ -115,9 +139,9 @@ sub vm_auth {
   $self->{auth} = \%auth;
 }
 
-=item base_vm($vm)
+=head2 base_vm($vm)
 
-The url to a vm that should be used as base VM.
+The URL to a base image to be used for the test VM.
 
 =cut
 
@@ -132,9 +156,9 @@ sub test(&) {
   $code->($test);
 }
 
-=item redirect_port($port)
+=head2 redirect_port($port)
 
-The redirected SSH port. Default 2222.
+Redirect local $port to the VM's SSH port (default: 2222).
 
 =cut
 
@@ -143,20 +167,28 @@ sub redirect_port {
   $self->{redirect_port} = $port;
 }
 
-=item run_task($task)
+=head2 run_task($task)
 
-The task to run on the test vm.
+The task to run on the test VM. You can run multiple tasks by passing an array reference.
 
 =cut
 
 sub run_task {
   my ( $self, $task ) = @_;
 
+  # allow multiple calls to run_task() without setting up new box
+  if ( $self->{box} ) {
+    $self->{box}->provision_vm($task);
+    return;
+  }
+
   my $box;
   box {
     $box = shift;
     $box->name( $self->{name} );
     $box->url( $self->{vm} );
+    $box->memory( $self->{memory} );
+    $box->cpus( $self->{cpus} );
 
     $box->network(
       1 => {
@@ -167,7 +199,13 @@ sub run_task {
     $box->forward_port( ssh => [ $self->{redirect_port}, 22 ] );
 
     $box->auth( %{ $self->{auth} } );
-    $box->setup($task);
+
+    if ( ref $task eq 'ARRAY' ) {
+      $box->setup(@$task);
+    }
+    else {
+      $box->setup($task);
+    }
   };
 
   $self->{box} = $box;
@@ -179,40 +217,73 @@ sub run_task {
   );
 }
 
-sub ok {
+sub ok() {
   my ( $self, $test, $msg ) = @_;
-  Test::More::ok( $test, $msg );
+  my $tb = Rex::Test::Base->builder;
+  $tb->ok( $test, $msg );
+}
+
+sub like {
+  my ( $self, $thing, $want, $name ) = @_;
+  my $tb = Rex::Test::Base->builder;
+  $tb->like( $thing, $want, $name );
+}
+
+sub diag {
+  my ( $self, $msg ) = @_;
+  my $tb = Rex::Test::Base->builder;
+  $tb->diag($msg);
 }
 
 sub finish {
-  Test::More::done_testing();
-}
+  my $tb = Rex::Test::Base->builder;
+  $tb->done_testing();
+  $tb->is_passing()
+    ? print "PASS\n"
+    : print "FAIL\n";
+  if ( !$tb->is_passing() ) {
+    Rex::Test::push_exit("FAIL");
+  }
+  $tb->reset();
 
-=back
+  Rex::pop_connection();
+}
 
 =head1 TEST METHODS
 
-=over 4
-
-=item has_content($file, $regexp)
+=head2 has_content($file, $regexp)
 
 Test if the content of $file matches against $regexp.
 
-=item has_package($package)
+=head2 has_dir($path)
 
-Test if the package $package is installed.
+Test if $path is present and is a directory.
 
-=item has_file($file)
+=head2 has_file($file)
 
-Test if the file $file is present.
+Test if $file is present.
 
-=item has_service_running($service)
+=head2 has_package($package, $version)
 
-Test if the service $service is running.
+Test if $package is installed, optionally at $version.
 
-=item has_service_stopped($service)
+=head2 has_service_running($service)
 
-Test if the service $service is stopped.
+Test if $service is running.
+
+=head2 has_service_stopped($service)
+
+Test if $service is stopped.
+
+=head2 has_stat($file, $stat)
+
+Test if $file has properties described in hash reference $stat. List of supported checks:
+
+=over 4
+
+=item group
+
+=item owner
 
 =back
 
@@ -221,21 +292,33 @@ Test if the service $service is stopped.
 our $AUTOLOAD;
 
 sub AUTOLOAD {
-  my $self = shift or return undef;
+  my $self = shift or return;
   ( my $method = $AUTOLOAD ) =~ s{.*::}{};
 
   if ( $method eq "DESTROY" ) {
     return;
   }
 
-  my $pkg = __PACKAGE__ . "::$method";
+  my $real_method = $method;
+  my $is_not      = 0;
+  if ( $real_method =~ m/^has_not_/ ) {
+    $real_method =~ s/^has_not_/has_/;
+    $is_not = 1;
+  }
+
+  my $pkg = __PACKAGE__ . "::$real_method";
   eval "use $pkg";
   if ($@) {
     confess "Error loading $pkg. No such test method.";
   }
 
   my $p = $pkg->new;
-  $p->run_test(@_);
+  if ($is_not) {
+    $p->run_not_test(@_);
+  }
+  else {
+    $p->run_test(@_);
+  }
 }
 
 1;

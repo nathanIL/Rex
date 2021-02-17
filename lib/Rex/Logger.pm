@@ -10,7 +10,7 @@ Rex::Logger - Logging Module
 
 =head1 DESCRIPTION
 
-This module if the logging module. You can define custom logformats.
+This module is the logging module. You can define custom logformats.
 
 =head1 SYNOPSIS
 
@@ -30,8 +30,11 @@ This module if the logging module. You can define custom logformats.
 
 package Rex::Logger;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 #use Rex;
 
@@ -39,9 +42,9 @@ our $no_color = 0;
 eval "use Term::ANSIColor";
 if ($@) { $no_color = 1; }
 
-# no colors under windows
 if ( $^O =~ m/MSWin/ ) {
-  $no_color = 1;
+  eval "use Win32::Console::ANSI";
+  if ($@) { $no_color = 1; }
 }
 
 my $has_syslog = 0;
@@ -56,6 +59,11 @@ Setting this variable to 1 will enable debug logging.
 =cut
 
 our $debug = 0;
+
+# we store the default handle to stderr
+# so that we can restore the handle inside the logging functions
+my $DEFAULT_STDERR;
+open $DEFAULT_STDERR, ">&", STDERR;
 
 =item $silent
 
@@ -94,6 +102,7 @@ sub init {
   eval {
     die
       if ( Rex::Config->get_log_filename || !Rex::Config->get_log_facility );
+    die if ( $^O =~ m/^MSWin/ );
 
     Sys::Syslog->use;
     openlog( "rex", "ndelay,pid", Rex::Config->get_log_facility );
@@ -115,6 +124,9 @@ sub info {
   }
 
   return if $silent;
+
+  local *STDERR;
+  open STDERR, ">&", $DEFAULT_STDERR;
 
   if ( defined($type) ) {
     $msg = format_string( $msg, uc($type) );
@@ -173,6 +185,9 @@ sub debug {
   my ($msg) = @_;
   return if $silent;
   return unless $debug;
+
+  local *STDERR;
+  open STDERR, ">&", $DEFAULT_STDERR;
 
   $msg = format_string( $msg, "DEBUG" );
 
@@ -246,7 +261,8 @@ sub format_string {
 
   my $date = get_timestamp;
   my $host =
-      Rex::get_current_connection()
+       Rex::get_current_connection()
+    && Rex::get_current_connection()->{conn}->server
     ? Rex::get_current_connection()->{conn}->server
     : "<local>";
   my $pid = $$;
@@ -260,6 +276,19 @@ sub format_string {
   $line =~ s/\%p/$pid/gms;
 
   return $line;
+}
+
+sub masq {
+  my ( $format, @params ) = @_;
+
+  return $format if scalar @params == 0;
+  return $format if scalar( grep { defined } @params ) == 0;
+
+  if ( exists $ENV{REX_DEBUG_INSECURE} && $ENV{REX_DEBUG_INSECURE} eq "1" ) {
+    return sprintf( $format, @params );
+  }
+
+  return sprintf( $format, ("**********") x @params );
 }
 
 =back

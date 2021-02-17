@@ -6,8 +6,11 @@
 
 package Rex::Inventory::Hal::Object::Net;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Inventory::Hal::Object;
 use base qw(Rex::Inventory::Hal::Object);
@@ -18,7 +21,7 @@ __PACKAGE__->has(
     { key => "net.interface", accessor => "dev", },
     { key => "net.address",   accessor => "mac", },
     { key => "info.product",  accessor => "product", parent => 1, },
-    { key => "info.vendor",   accessor => "vendor", parent => 1, },
+    { key => "info.vendor",   accessor => "vendor",  parent => 1, },
 
   ]
 );

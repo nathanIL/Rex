@@ -6,11 +6,13 @@
 
 package Rex::Virtualization::LibVirt::blklist;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
-use Rex::Commands::Run;
 use Rex::Helper::Run;
 
 use Data::Dumper;
@@ -29,10 +31,11 @@ sub execute {
 
   Rex::Logger::debug("Getting block list of domain: $vmname");
 
-  my @blklist = i_run "virsh -c $uri domblklist $vmname --details";
+  my @blklist = i_run "virsh -c $uri domblklist '$vmname' --details",
+    fail_ok => 1;
 
   if ( $? != 0 ) {
-    die("Error running virsh domblklist $vmname");
+    die("Error running virsh domblklist '$vmname'");
   }
 
   my %ret = ();
@@ -54,7 +57,8 @@ sub execute {
       my $unit = $options{unit} || 1;
       for my $target ( keys %ret ) {
         my @infos =
-          i_run "virsh -c $uri domblkinfo $vmname $target 2>/dev/null";
+          i_run "virsh -c $uri domblkinfo '$vmname' '$target' 2>/dev/null",
+          fail_ok => 1;
         if ( $? == 0 ) {
           for my $line (@infos) {
             my ( $k, $v ) = split( /:\s+/, $line );

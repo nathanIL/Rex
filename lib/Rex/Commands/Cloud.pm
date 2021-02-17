@@ -48,14 +48,15 @@ Version <= 1.0: All these functions will not be reported.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Cloud;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 require Rex::Exporter;
 use base qw(Rex::Exporter);
@@ -74,7 +75,8 @@ use Rex::Group::Entry::Server;
   get_cloud_operating_systems
   cloud_image_list
   cloud_object
-  get_cloud_floating_ip);
+  get_cloud_floating_ip
+  cloud_upload_key);
 
 Rex::Config->register_set_handler(
   "cloud" => sub {
@@ -95,7 +97,7 @@ Rex::Config->register_set_handler(
   }
 );
 
-=item cloud_service($cloud_service)
+=head2 cloud_service($cloud_service)
 
 Define which cloud service to use.
 
@@ -127,7 +129,7 @@ sub cloud_service {
   }
 }
 
-=item cloud_auth($param1, $param2, ...)
+=head2 cloud_auth($param1, $param2, ...)
 
 Set the authentication for the cloudservice.
 
@@ -153,7 +155,7 @@ sub cloud_auth {
   @cloud_auth = @_;
 }
 
-=item cloud_region($region)
+=head2 cloud_region($region)
 
 Set the cloud region.
 
@@ -163,7 +165,7 @@ sub cloud_region {
   ($cloud_region) = @_;
 }
 
-=item cloud_instance_list
+=head2 cloud_instance_list
 
 Get all instances of a cloud service.
 
@@ -192,7 +194,7 @@ sub cloud_instance_list {
   return cloud_object()->list_instances(@_);
 }
 
-=item cloud_volume_list
+=head2 cloud_volume_list
 
 Get all volumes of a cloud service.
 
@@ -211,7 +213,7 @@ sub cloud_volume_list {
   return cloud_object()->list_volumes();
 }
 
-=item cloud_network_list
+=head2 cloud_network_list
 
 Get all networks of a cloud service.
 
@@ -229,7 +231,7 @@ sub cloud_network_list {
   return cloud_object()->list_networks();
 }
 
-=item cloud_image_list
+=head2 cloud_image_list
 
 Get a list of all available cloud images.
 
@@ -239,7 +241,28 @@ sub cloud_image_list {
   return cloud_object()->list_images();
 }
 
-=item get_cloud_instances_as_group
+=head2 cloud_upload_key
+
+Upload public SSH key to cloud provider
+
+ private_key '~/.ssh/mykey
+ public_key  '~/.ssh/mykey.pub';
+ 
+ task "cloudprovider", sub {
+   cloud_upload_key;
+
+   cloud_instance create => {
+     ...
+   };
+ };
+
+=cut
+
+sub cloud_upload_key {
+  return cloud_object()->upload_key();
+}
+
+=head2 get_cloud_instances_as_group
 
 Get a list of all running instances of a cloud service. This can be used for a I<group> definition.
 
@@ -250,24 +273,20 @@ Get a list of all running instances of a cloud service. This can be used for a I
 
 sub get_cloud_instances_as_group {
 
-  # return funcRef
-  return sub {
-    my @list = cloud_object()->list_running_instances();
+  my @list = cloud_object()->list_running_instances();
 
-    my @ret;
+  my @ret;
 
-    for my $instance (@list) {
-      push( @ret, Rex::Group::Entry::Server->new( name => $instance->{"ip"} ) );
-    }
+  for my $instance (@list) {
+    push( @ret, Rex::Group::Entry::Server->new( name => $instance->{"ip"} ) );
+  }
 
-    return @ret;
-  };
-
+  return @ret;
 }
 
-=item cloud_instance($action, $data)
+=head2 cloud_instance($action, $data)
 
-This function controlls all aspects of a cloud instance.
+This function controls all aspects of a cloud instance.
 
 =cut
 
@@ -280,7 +299,7 @@ sub cloud_instance {
     return $cloud->list_running_instances();
   }
 
-=item create
+=head2 create
 
 Create a new instance.
 
@@ -313,7 +332,7 @@ Create a new instance.
     $cloud->run_instance(%data_hash);
   }
 
-=item start
+=head2 start
 
 Start an existing instance
 
@@ -325,7 +344,7 @@ Start an existing instance
     $cloud->start_instance( instance_id => $data );
   }
 
-=item stop
+=head2 stop
 
 Stop an existing instance
 
@@ -337,7 +356,7 @@ Stop an existing instance
     $cloud->stop_instance( instance_id => $data );
   }
 
-=item terminate
+=head2 terminate
 
 Terminate an instance. This will destroy all data and remove the instance.
 
@@ -351,7 +370,7 @@ Terminate an instance. This will destroy all data and remove the instance.
 
 }
 
-=item get_cloud_regions
+=head2 get_cloud_regions
 
 Returns all regions as an array.
 
@@ -361,7 +380,7 @@ sub get_cloud_regions {
   return cloud_object()->get_regions;
 }
 
-=item cloud_volume($action , $data)
+=head2 cloud_volume($action , $data)
 
 This function controlls all aspects of a cloud volume.
 
@@ -385,7 +404,7 @@ sub cloud_volume {
 
   my $cloud = cloud_object();
 
-=item create
+=head2 create
 
 Create a new volume. Size is in Gigabytes.
 
@@ -402,7 +421,7 @@ Create a new volume. Size is in Gigabytes.
     );
   }
 
-=item attach
+=head2 attach
 
 Attach a volume to an instance.
 
@@ -423,7 +442,7 @@ Attach a volume to an instance.
     );
   }
 
-=item detach
+=head2 detach
 
 Detach a volume from an instance.
 
@@ -444,7 +463,7 @@ Detach a volume from an instance.
     );
   }
 
-=item delete
+=head2 delete
 
 Delete a volume. This will destroy all data.
 
@@ -464,7 +483,7 @@ Delete a volume. This will destroy all data.
 
 }
 
-=item get_cloud_floating_ip
+=head2 get_cloud_floating_ip
 
 Returns first available floating IP
 
@@ -481,12 +500,12 @@ Returns first available floating IP
  };
 
 =cut
+
 sub get_cloud_floating_ip {
-  return cloud_object()->get_floating_ip
+  return cloud_object()->get_floating_ip;
 }
 
-
-=item cloud_network
+=head2 cloud_network
 
 =cut
 
@@ -495,7 +514,7 @@ sub cloud_network {
   my ( $action, $data ) = @_;
   my $cloud = cloud_object();
 
-=item create
+=head2 create
 
 Create a new network.
 
@@ -509,7 +528,7 @@ Create a new network.
     $cloud->create_network( %{$data} );
   }
 
-=item delete
+=head2 delete
 
 Delete a network.
 
@@ -524,7 +543,7 @@ Delete a network.
   }
 }
 
-=item get_cloud_availability_zones
+=head2 get_cloud_availability_zones
 
 Returns all availability zones of a cloud services. If available.
 
@@ -538,7 +557,7 @@ sub get_cloud_availability_zones {
   return cloud_object()->get_availability_zones();
 }
 
-=item get_cloud_plans
+=head2 get_cloud_plans
 
 Retrieve information of the available cloud plans. If supported.
 
@@ -548,7 +567,7 @@ sub get_cloud_plans {
   return cloud_object()->list_plans;
 }
 
-=item get_cloud_operating_systems
+=head2 get_cloud_operating_systems
 
 Retrieve information of the available cloud plans. If supported.
 
@@ -558,7 +577,7 @@ sub get_cloud_operating_systems {
   return cloud_object()->list_operating_systems;
 }
 
-=item cloud_object
+=head2 cloud_object
 
 Returns the cloud object itself.
 
@@ -572,9 +591,5 @@ sub cloud_object {
 
   return $cloud;
 }
-
-=back
-
-=cut
 
 1;

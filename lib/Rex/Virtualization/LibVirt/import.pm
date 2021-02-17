@@ -6,8 +6,11 @@
 
 package Rex::Virtualization::LibVirt::import;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::Run;
@@ -32,21 +35,28 @@ sub execute {
   my $cwd = i_run "pwd";
   chomp $cwd;
 
-  my $dir  = dirname $opt{file};
-  my $file = "storage/" . basename $opt{file};
-  mkdir "./storage";
+  my $dir = dirname $opt{file};
+  my ( undef, undef, $suffix ) = fileparse( $opt{file}, qr{\.[^.]*} );
+  $opt{storage_path} = $cwd . '/storage' unless ( $opt{storage_path} );
+  my $file = $opt{storage_path} . '/' . $dom . $suffix;
+  i_run "mkdir -p $opt{storage_path}";
 
   my $format = "qcow2";
+
+  my @serial_devices;
+  if ( exists $opt{serial_devices} ) {
+    @serial_devices = @{ $opt{serial_devices} };
+  }
 
   if ( $opt{file} =~ m/\.ova$/ ) {
     Rex::Logger::debug("Importing ova file. Try to convert with qemu-img");
     $file =~ s/\.[a-z]+$//;
 
-    my @vmdk = grep { m/\.vmdk$/ } i_run "tar -C $dir -vxf $opt{file}";
+    my @vmdk = grep { m/\.vmdk$/ } i_run "tar -C '$dir' -vxf '$opt{file}'";
 
-    Rex::Logger::debug(
-      "converting $cwd/tmp/$vmdk[0] -> $cwd/storage/$file.qcow2");
-    i_run "qemu-img convert -O qcow2 $cwd/tmp/$vmdk[0] $cwd/$file.qcow2";
+    Rex::Logger::debug("converting '$cwd/tmp/$vmdk[0]' -> '$file.qcow2'");
+    i_run "qemu-img convert -O qcow2 '$cwd/tmp/$vmdk[0]' '$file.qcow2'",
+      fail_ok => 1;
 
     if ( $? != 0 ) {
       Rex::Logger::info(
@@ -65,19 +75,31 @@ sub execute {
     cp $opt{file}, $file;
     if ( $file =~ m/\.gz$/ ) {
       Rex::Logger::debug("Extracting gzip'ed file $file");
-      i_run "gunzip -q -f $file";
+      i_run "gunzip -q -f '$file'";
       $file =~ s/\.gz$//;
     }
   }
 
-  my ($format_out) = grep { m/^file format:/ } i_run "qemu-img info $file";
+  my ($format_out) = grep { m/^file format:/ } i_run "qemu-img info '$file'",
+    fail_ok => 1;
   if ( $format_out =~ m/^file format: (.*)$/i ) {
     $format = $1;
   }
 
   my @network = values %{ $opt{__network} };
+  if ( scalar @network == 0 ) {
+
+    # create default network
+    push @network,
+      {
+      type    => "network",
+      network => "default",
+      };
+  }
+
   for (@network) {
-    $_->{type} = "bridge"  if ( $_->{type} eq "bridged" );
+    $_->{type} ||= "network";
+    $_->{type} = "bridge"  if ( $_->{type} && $_->{type} eq "bridged" );
     $_->{type} = "network" if ( $_->{type} eq "nat" );
     if ( $_->{type} eq "network" && !exists $_->{network} ) {
       $_->{network} = "default";
@@ -88,12 +110,15 @@ sub execute {
     $dom,
     storage => [
       {
-        file        => "$cwd/$file",
+        file        => "$file",
         dev         => "vda",
         driver_type => $format,
       },
     ],
-    network => \@network,
+    network        => \@network,
+    serial_devices => \@serial_devices,
+    memory         => $opt{memory},
+    cpus           => $opt{cpus},
   );
 
   if ( exists $opt{__forward_port} ) {

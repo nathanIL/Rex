@@ -6,14 +6,18 @@
 
 package Rex::Interface::File::HTTP;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Data::Dumper;
 
 BEGIN {
+  use Rex::Require;
   MIME::Base64->use;
-};
+}
 
 use Rex::Commands;
 use Rex::Interface::Fs;
@@ -72,6 +76,9 @@ sub read {
 
 sub write {
   my ( $self, $buf ) = @_;
+
+  utf8::encode($buf)
+    if Rex::Config->get_write_utf8_files && utf8::is_utf8($buf);
 
   my $resp = connection->post(
     "/file/write_fh",

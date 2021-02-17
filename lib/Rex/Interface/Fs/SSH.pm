@@ -6,10 +6,13 @@
 
 package Rex::Interface::Fs::SSH;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Fcntl qw(:DEFAULT :mode);
+our $VERSION = '9999.99.99_99'; # VERSION
+
+use Rex::Helper::File::Stat;
 use Rex::Helper::Encode;
 use Rex::Interface::Exec;
 use Rex::Interface::Fs::Base;
@@ -61,9 +64,12 @@ sub is_dir {
 
   my $sftp = Rex::get_sftp();
   my $stat = $sftp->stat($path);
-  defined $stat ? return S_ISDIR( $stat->{mode} ) : return undef;
 
   Rex::Commands::profiler()->end("is_dir: $path");
+
+  defined $stat && defined $stat->{mode}
+    ? return Rex::Helper::File::Stat->S_ISDIR( $stat->{mode} )
+    : return undef;
 }
 
 sub is_file {
@@ -73,16 +79,16 @@ sub is_file {
 
   my $sftp = Rex::get_sftp();
   my $stat = $sftp->stat($file);
-
-  defined $stat
-    ? return ( S_ISREG( $stat->{mode} )
-      || S_ISLNK( $stat->{mode} )
-      || S_ISBLK( $stat->{mode} )
-      || S_ISCHR( $stat->{mode} )
-      || S_ISFIFO( $stat->{mode} ) )
-    : return undef;
-
   Rex::Commands::profiler()->end("is_file: $file");
+
+  defined $stat && defined $stat->{mode}
+    ? return ( Rex::Helper::File::Stat->S_ISREG( $stat->{mode} )
+      || Rex::Helper::File::Stat->S_ISLNK( $stat->{mode} )
+      || Rex::Helper::File::Stat->S_ISBLK( $stat->{mode} )
+      || Rex::Helper::File::Stat->S_ISCHR( $stat->{mode} )
+      || Rex::Helper::File::Stat->S_ISFIFO( $stat->{mode} )
+      || Rex::Helper::File::Stat->S_ISSOCK( $stat->{mode} ) )
+    : return undef;
 }
 
 sub unlink {
@@ -91,7 +97,12 @@ sub unlink {
   my $sftp = Rex::get_sftp();
   for my $file (@files) {
     Rex::Commands::profiler()->start("unlink: $file");
-    eval { $sftp->unlink($file); };
+    eval {
+      $sftp->unlink($file);
+      1;
+    } or do {
+      die "Error unlinking file: $file." if ( Rex::Config->get_autodie );
+    };
     Rex::Commands::profiler()->end("unlink: $file");
   }
 }
@@ -108,6 +119,9 @@ sub mkdir {
   if ( $self->is_dir($dir) ) {
     $ret = 1;
   }
+  else {
+    die "Error creating directory: $dir." if ( Rex::Config->get_autodie );
+  }
 
   Rex::Commands::profiler()->end("mkdir: $dir");
 
@@ -122,9 +136,10 @@ sub stat {
   my $sftp = Rex::get_sftp();
   my %ret  = $sftp->stat($file);
 
-  if ( !%ret ) { return; }
+  if ( !%ret ) { return undef; }
 
-  $ret{'mode'} = sprintf( "%04o", $ret{'mode'} & 07777 );
+  $ret{'mode'} =
+    sprintf( "%04o", Rex::Helper::File::Stat->S_IMODE( $ret{'mode'} ) );
 
   Rex::Commands::profiler()->end("stat: $file");
 
@@ -135,6 +150,7 @@ sub is_readable {
   my ( $self, $file ) = @_;
 
   Rex::Commands::profiler()->start("is_readable: $file");
+  ($file) = $self->_normalize_path($file);
 
   my $exec = Rex::Interface::Exec->create;
   $exec->exec("perl -le 'if(-r \"$file\") { exit 0; } exit 1'");
@@ -148,6 +164,7 @@ sub is_writable {
   my ( $self, $file ) = @_;
 
   Rex::Commands::profiler()->start("is_writable: $file");
+  ($file) = $self->_normalize_path($file);
 
   my $exec = Rex::Interface::Exec->create;
   $exec->exec("perl -le 'if(-w \"$file\") { exit 0; } exit 1'");
@@ -176,20 +193,28 @@ sub rename {
   my ( $self, $old, $new ) = @_;
 
   my $ret;
+  my $orig_path_old = $old;
+  my $orig_path_new = $new;
 
   Rex::Commands::profiler()->start("rename: $old -> $new");
+  ($old) = $self->_normalize_path($old);
+  ($new) = $self->_normalize_path($new);
 
   # don't use rename() doesn't work with different file systems / partitions
   my $exec = Rex::Interface::Exec->create;
-  $exec->exec("/bin/mv '$old' '$new'");
+  $exec->exec("/bin/mv $old $new");
 
-  if ( ( !$self->is_file($old) && !$self->is_dir($old) )
-    && ( $self->is_file($new) || $self->is_dir($new) ) )
+  if ( ( !$self->is_file($orig_path_old) && !$self->is_dir($orig_path_old) )
+    && ( $self->is_file($orig_path_new) || $self->is_dir($orig_path_new) ) )
   {
     $ret = 1;
   }
+  else {
+    die "Error renaming file or directory ($orig_path_old -> $orig_path_new)."
+      if ( Rex::Config->get_autodie );
+  }
 
-  Rex::Commands::profiler()->end("rename: $old -> $new");
+  Rex::Commands::profiler()->end("rename: $orig_path_old -> $orig_path_new");
 
   return $ret;
 }

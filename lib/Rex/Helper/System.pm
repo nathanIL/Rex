@@ -6,8 +6,11 @@
 
 package Rex::Helper::System;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Helper::Hash;
 

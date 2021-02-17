@@ -6,11 +6,12 @@
 
 package Rex::Pkg::SunOS::OpenCSW;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
-use Rex::Helper::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Commands::File;
 use Rex::Pkg::SunOS;
 

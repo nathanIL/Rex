@@ -6,8 +6,13 @@
 
 package Rex::Interface::Cache::YAML;
 
+use 5.010001;
+use strict;
+use warnings;
 use Rex::Interface::Cache::Base;
 use base qw(Rex::Interface::Cache::Base);
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 require Rex::Commands;
 require Rex::Commands::Fs;

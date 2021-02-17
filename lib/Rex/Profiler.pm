@@ -6,8 +6,11 @@
 
 package Rex::Profiler;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Time::HiRes qw(gettimeofday tv_interval);
 
@@ -40,7 +43,7 @@ sub end {
   return unless ( $self->{__data}->{$info}->[-1] );
 
   my $data = $self->{__data}->{$info}->[-1];
-  $data->{end} = [gettimeofday];
+  $data->{end}      = [gettimeofday];
   $data->{duration} = tv_interval( $data->{start}, $data->{end} );
 
   $self->{__data}->{$info}->[-1] = $data;

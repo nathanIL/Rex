@@ -6,14 +6,20 @@
 
 package Rex::Interface::File::OpenSSH;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Fcntl;
 use Rex::Interface::Fs;
 use Rex::Interface::File::Base;
 
-BEGIN { Net::SFTP::Foreign::Constants->use(qw(:flags :fxp)); };
+BEGIN {
+  use Rex::Require;
+  Net::SFTP::Foreign::Constants->use(qw(:flags :fxp));
+}
 
 use base qw(Rex::Interface::File::Base);
 
@@ -54,12 +60,16 @@ sub read {
   my ( $self, $len ) = @_;
 
   my $sftp = Rex::get_sftp();
-  my $buf = $sftp->read( $self->{fh}, $len );
+  my $buf  = $sftp->read( $self->{fh}, $len );
   return $buf;
 }
 
 sub write {
   my ( $self, $buf ) = @_;
+
+  utf8::encode($buf)
+    if Rex::Config->get_write_utf8_files && utf8::is_utf8($buf);
+
   my $sftp = Rex::get_sftp();
   $sftp->write( $self->{fh}, $buf );
 }

@@ -1,11 +1,14 @@
 package Rex::SCM::Subversion;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Cwd qw(getcwd);
 use Rex::Commands::Fs;
-use Rex::Commands::Run;
+use Rex::Helper::Run;
 
 use vars qw($CHECKOUT_COMMAND);
 
@@ -65,7 +68,7 @@ sub checkout {
   Rex::Logger::info( "Cloning "
       . $repo_info->{"url"} . " to "
       . ( $checkout_to ? $checkout_to : "." ) );
-  my $out = run "$checkout_cmd";
+  my $out = i_run "$checkout_cmd", fail_ok => 1;
   unless ( $? == 0 ) {
     Rex::Logger::info( "Error checking out repository.", "warn" );
     Rex::Logger::info($out);

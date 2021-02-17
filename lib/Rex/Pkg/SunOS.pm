@@ -6,10 +6,12 @@
 
 package Rex::Pkg::SunOS;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Helper::Run;
 use Rex::Commands::File;
 use Rex::Pkg::Base;
@@ -47,7 +49,7 @@ sub update {
   $cmd .= " -d " . $option->{"source"};
   $cmd .= " -n " . $pkg;
 
-  my $f = i_run($cmd);
+  my $f = i_run( $cmd, fail_ok => 1 );
 
   unless ( $? == 0 ) {
     Rex::Logger::info( "Error installing $pkg.", "warn" );
@@ -68,7 +70,7 @@ sub remove {
   my $cmd = "pkgrm -n ";
   $cmd .= " -a " . $option->{"adminfile"} if ( $option->{"adminfile"} );
 
-  my $f = i_run( $cmd . " $pkg" );
+  my $f = i_run( $cmd . " $pkg", fail_ok => 1 );
 
   unless ( $? == 0 ) {
     Rex::Logger::info( "Error removing $pkg.", "warn" );

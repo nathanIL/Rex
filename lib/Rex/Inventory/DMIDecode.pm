@@ -6,9 +6,12 @@
 
 package Rex::Inventory::DMIDecode;
 
+use 5.010001;
 use strict;
 use warnings;
 use Data::Dumper;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Inventory::DMIDecode::BaseBoard;
 use Rex::Inventory::DMIDecode::Bios;
@@ -125,27 +128,19 @@ sub _read_dmidecode {
     @lines = @{ $self->{lines} };
   }
   else {
-    my $dmidecode = can_run("dmidecode");
-
-    unless ($dmidecode) {
-
-      #Rex::Logger::debug("Please install dmidecode on the target system.");
-      #return;
-      $dmidecode = "dmidecode";
+    unless ( can_run("dmidecode") ) {
+      Rex::Logger::debug("Please install dmidecode on the target system.");
+      return;
     }
 
-    @lines = i_run $dmidecode;
-    if ( $? != 0 ) {
-      Rex::Logger::debug("Please install dmidecode on the target system.");
+    eval { @lines = i_run "dmidecode"; };
+
+    if ($@) {
+      Rex::Logger::debug("Error running dmidecode");
       return;
     }
   }
   chomp @lines;
-
-  unless (@lines) {
-    Rex::Logger::debug("Please install dmidecode on the target system.");
-    return;
-  }
 
   my %section     = ();
   my $section     = "";
@@ -206,9 +201,9 @@ sub _read_dmidecode {
 
       my ( $key, $val ) = split( /: /, $line, 2 );
       if ( !$val ) { $key =~ s/:$//; }
-      $sub_section = $key;
+      $sub_section       = $key;
       $section{$section} = [ { $key => $val } ];
-      $new_section = 0;
+      $new_section       = 0;
     }
     elsif ( $l =~ m/^\t\t[a-zA-Z0-9]/ ) {
       my $href = $section{$section}->[-1];

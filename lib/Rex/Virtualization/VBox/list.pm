@@ -6,8 +6,11 @@
 
 package Rex::Virtualization::VBox::list;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::Run;
@@ -19,13 +22,13 @@ sub execute {
   my @domains;
 
   if ( $arg1 eq "all" ) {
-    @domains = i_run "VBoxManage list vms";
+    @domains = i_run "VBoxManage list vms", fail_ok => 1;
     if ( $? != 0 ) {
       die("Error running VBoxManage list vms");
     }
   }
   elsif ( $arg1 eq "running" ) {
-    @domains = i_run "VBoxManage list runningvms";
+    @domains = i_run "VBoxManage list runningvms", fail_ok => 1;
     if ( $? != 0 ) {
       die("Error running VBoxManage runningvms");
     }
@@ -38,8 +41,8 @@ sub execute {
   for my $line (@domains) {
     my ( $name, $id ) = $line =~ m:^"([^"]+)"\s*\{([^\}]+)\}$:;
 
-    my @status = grep { $_ = $1 if /^VMState="([^"]+)"$/ }
-      i_run "VBoxManage showvminfo \"{$id}\" --machinereadable";
+    my @status = map { /^VMState="([^"]+)"$/ }
+      i_run "VBoxManage showvminfo \"{$id}\" --machinereadable", fail_ok => 1;
     my $status;
 
     push(

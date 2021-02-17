@@ -6,9 +6,13 @@
 
 package Rex::TaskList;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
+use Data::Dumper;
 use Rex::Config;
 use Rex::Logger;
 use Rex::Interface::Executor;
@@ -35,7 +39,7 @@ sub create {
 
   eval "use $class_name";
   if ($@) {
-    die("TaskList module not found.");
+    die("TaskList module not found: $@");
   }
 
   $task_list = $class_name->new;
@@ -44,4 +48,21 @@ sub create {
     "new distribution class of type " . ref($task_list) . " created." );
 
   return $task_list;
+}
+
+sub run {
+  my ( $class, $task_name, %option ) = @_;
+
+  $class = ref $class ? $class : $class->create;
+
+  my $task = ref $task_name ? $task_name : $class->get_task($task_name);
+
+  my $old_task = $class->{__current_task__};
+  $class->{__current_task__} = $task;
+
+  $_->($task) for @{ $task->{before_task_start} };
+  $class->run( $task, %option );
+  $_->($task) for @{ $task->{after_task_finished} };
+
+  $class->{__current_task__} = $old_task;
 }

@@ -24,17 +24,18 @@ All these functions are not idempotent.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Kernel;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
-use Rex::Commands::Run;
+use Rex::Helper::Run;
 use Rex::Commands::Gather;
 
 use Data::Dumper;
@@ -46,9 +47,9 @@ use vars qw(@EXPORT);
 
 @EXPORT = qw(kmod);
 
-=item kmod($action => $module)
+=head2 kmod($action => $module)
 
-This function load or unload a kernel module.
+This function loads or unloads a kernel module.
 
  task "load", sub {
    kmod load => "ipmi_si";
@@ -98,9 +99,9 @@ sub kmod {
 
     $unload_command = sub {
       my @mod_split = split( /\//, $module );
-      my $mod = $mod_split[-1];
+      my $mod       = $mod_split[-1];
 
-      my ($mod_id) = grep { $_ = $1 if $_ =~ qr{(\d+).*$mod} } run "modinfo";
+      my ($mod_id) = map { /^\s*(\d+)\s+.*$mod/ } i_run "modinfo";
       my $cmd = "modunload -i $mod_id";
 
       if ( $options->{"exec_file"} ) {
@@ -116,7 +117,7 @@ sub kmod {
 
   if ( $action eq "load" ) {
     Rex::Logger::debug("Loading Kernel Module: $module");
-    run "$load_command $module";
+    i_run "$load_command $module", fail_ok => 1;
     unless ( $? == 0 ) {
       Rex::Logger::info( "Error loading Kernel Module: $module", "warn" );
       die("Error loading Kernel Module: $module");
@@ -132,7 +133,7 @@ sub kmod {
       $unload_command_str = &$unload_command();
     }
 
-    run "$unload_command_str $module";
+    i_run "$unload_command_str $module", fail_ok => 1;
     unless ( $? == 0 ) {
       Rex::Logger::info( "Error unloading Kernel Module: $module", "warn" );
       die("Error unloading Kernel Module: $module");
@@ -146,9 +147,5 @@ sub kmod {
     die("Unknown action $action");
   }
 }
-
-=back
-
-=cut
 
 1;

@@ -20,14 +20,15 @@ With this module you can upload a local file via sftp to a remote host.
 
 =head1 EXPORTED FUNCTIONS
 
-=over 4
-
 =cut
 
 package Rex::Commands::Upload;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 require Rex::Exporter;
 use File::Basename qw(basename);
@@ -44,7 +45,7 @@ use base qw(Rex::Exporter);
 
 @EXPORT = qw(upload);
 
-=item upload($local, $remote)
+=head2 upload($local, $remote)
 
 Perform an upload. If $remote is a directory the file will be uploaded to that directory.
 
@@ -52,26 +53,27 @@ Perform an upload. If $remote is a directory the file will be uploaded to that d
    upload "localfile", "/path";
  };
 
+This function supports the following L<hooks|Rex::Hook>:
 
-This function supports the following hooks:
-
-=over 8
+=over 4
 
 =item before
 
-This gets executed before everything is done. The return value of this hook overwrite the original parameters of the function-call.
+This gets executed before anything is done. All original parameters are passed to it.
+
+The return value of this hook overwrites the original parameters of the function-call.
 
 =item before_change
 
-This gets executed right before the new file is written.
+This gets executed right before the new file is written. The local file name, and the remote file name are passed as parameters.
 
 =item after_change
 
-This gets executed right after the file was written.
+This gets executed right after the file was written. On top of the local file name, and the remote file name, any returned results are passed as parameters.
 
 =item after
 
-This gets executed right before the upload() function returns.
+This gets executed right before the C<upload()> function returns. All original parameters, and any results returned are passed to it.
 
 =back
 
@@ -94,7 +96,7 @@ sub upload {
 
   my ( $local, $remote ) = @_;
 
-  $local = resolv_path( $local, 1 );
+  $local  = resolv_path( $local, 1 );
   $remote = resolv_path($remote);
 
   my $fs = Rex::Interface::Fs->create;
@@ -115,9 +117,11 @@ sub upload {
   # will first look if files/hosts.live is available, if not it will
   # use files/hosts
 
-  my $old_local = $local;    # for the upload location use the given name
+  my $old_local = $local; # for the upload location use the given name
 
-  if ( -f "$local." . Rex::Config->get_environment ) {
+  if ( Rex::Config->get_environment
+    && -f "$local." . Rex::Config->get_environment )
+  {
     $local = "$local." . Rex::Config->get_environment;
   }
 
@@ -192,9 +196,5 @@ sub upload {
 
   return $__ret;
 }
-
-=back
-
-=cut
 
 1;

@@ -6,10 +6,12 @@
 
 package Rex::Service::Base;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Helper::Run;
 use Rex::Logger;
 
@@ -27,8 +29,19 @@ sub new {
   return $self;
 }
 
-sub get_output            { shift->{__cmd_output__}; }
-sub _prepare_service_name { return $_[1]; }
+sub get_output { shift->{__cmd_output__}; }
+
+sub _prepare_service_name {
+  my ( $self, $service_name ) = @_;
+
+  if ( !$self->service_exists($service_name)
+    && Rex::Config->get_check_service_exists )
+  {
+    die "Service $service_name not found.";
+  }
+
+  return $service_name;
+}
 
 sub _filter_options {
   my ( $self, $service, $options ) = @_;
@@ -43,13 +56,16 @@ sub _filter_options {
 sub _execute {
   my ( $self, $cmd ) = @_;
 
-  $self->{__cmd_output__} = i_run $cmd, nohup => 1;
+  my $ret_val;
+  eval {
+    $self->{__cmd_output__} = i_run $cmd, nohup => 1;
+    $ret_val = 1;
+  } or do {
+    $self->{__cmd_output__} = Rex::Commands::last_command_output();
+    $ret_val = 0;
+  };
 
-  if ( $? == 0 ) {
-    return 1;
-  }
-
-  return 0;
+  return $ret_val;
 }
 
 sub start {
@@ -156,6 +172,18 @@ sub action {
   $service = $self->_prepare_service_name($service);
 
   my $cmd = sprintf $self->{commands}->{action}, $service, $action;
+  return $self->_execute($cmd);
+}
+
+sub service_exists {
+  my ( $self, $service ) = @_;
+
+  # always return true if we can't verify if a service exists
+  if ( !exists $self->{commands}->{service_exists} ) {
+    return 1;
+  }
+
+  my $cmd = sprintf $self->{commands}->{service_exists}, $service;
   return $self->_execute($cmd);
 }
 

@@ -6,11 +6,13 @@
 
 package Rex::User::NetBSD;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
-use Rex::Commands::Run;
 use Rex::Commands::MD5;
 use Rex::Helper::Run;
 use Rex::Commands::Fs;
@@ -25,7 +27,7 @@ use base qw(Rex::User::Linux);
 sub new {
   my $that  = shift;
   my $proto = ref($that) || $that;
-  my $self  = $that->SUPER::new(@_);
+  my $self  = $proto->SUPER::new(@_);
 
   bless( $self, $proto );
 
@@ -76,7 +78,7 @@ sub create_user {
     $cmd .= " -d " . $data->{home};
   }
 
-  if ( $should_create_home && !defined $uid ) {    #useradd mode
+  if ( $should_create_home && !defined $uid ) { #useradd mode
     $cmd .= " -m ";
   }
 
@@ -109,7 +111,7 @@ sub create_user {
   $fh->write("$cmd $user\nexit \$?\n");
   $fh->close;
 
-  i_run "/bin/sh $rnd_file";
+  i_run "/bin/sh $rnd_file", fail_ok => 1;
   if ( $? == 0 ) {
     Rex::Logger::debug("User $user created/updated.");
   }
@@ -130,7 +132,7 @@ sub create_user {
       "usermod -p \$(pwhash '" . $data->{password} . "') $user\nexit \$?\n" );
     $fh->close;
 
-    i_run "/bin/sh $rnd_file";
+    i_run "/bin/sh $rnd_file", fail_ok => 1;
     if ( $? != 0 ) {
       die("Error setting password for $user");
     }
@@ -148,7 +150,7 @@ sub create_user {
       "usermod -p '" . $data->{crypt_password} . "' $user\nexit \$?\n" );
     $fh->close;
 
-    i_run "/bin/sh $rnd_file";
+    i_run "/bin/sh $rnd_file", fail_ok => 1;
     if ( $? != 0 ) {
       die("Error setting password for $user");
     }
@@ -187,16 +189,22 @@ sub rm_user {
     $cmd .= " -r";
   }
 
-  i_run $cmd . " " . $user;
+  my $output = i_run $cmd . " " . $user, fail_ok => 1;
+  if ( $? == 67 ) {
+    Rex::Logger::info( "Cannot delete user $user (no such user)", "warn" );
+  }
+  elsif ( $? != 0 ) {
+    die("Error deleting user $user ($output)");
+  }
 
   if ( exists $data->{delete_home} && is_dir( $user_info{home} ) ) {
     Rex::Logger::debug(
-      "userdel doesn't deleted home. removing it now by hand...");
+      "userdel doesn't delete home directory. removing it now by hand...");
     rmdir $user_info{home};
   }
 
   if ( $? != 0 ) {
-    die("Error deleting user $user");
+    die( "Error removing " . $user_info{home} );
   }
 
 }

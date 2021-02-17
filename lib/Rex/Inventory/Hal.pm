@@ -6,16 +6,19 @@
 
 package Rex::Inventory::Hal;
 
+use 5.010001;
+use strict;
+use warnings;
+
 use Rex::Inventory::Hal::Object;
 use Rex::Commands::Run;
 use Rex::Helper::Run;
 use Rex::Commands::Gather;
 use Rex::Logger;
 
-use Data::Dumper;
+our $VERSION = '9999.99.99_99'; # VERSION
 
-use strict;
-use warnings;
+use Data::Dumper;
 
 sub new {
   my $that  = shift;
@@ -131,7 +134,7 @@ sub _read_lshal {
     die;
   }
 
-  my @lines = i_run "lshal";
+  my @lines = i_run "lshal", fail_ok => 1;
   my %devices;
   my %tmp_devices;
 

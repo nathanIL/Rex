@@ -6,9 +6,16 @@
 
 package Rex::Helper::DBI;
 
+use 5.010001;
 use strict;
 use warnings;
-use DBI;
+
+our $VERSION = '9999.99.99_99'; # VERSION
+
+BEGIN {
+  use Rex::Require;
+  DBI->require;
+}
 
 my %db_connections;
 

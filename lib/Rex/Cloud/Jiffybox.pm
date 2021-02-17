@@ -6,15 +6,20 @@
 
 package Rex::Cloud::Jiffybox;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
+
 BEGIN {
+  use Rex::Require;
   LWP::UserAgent->use;
   HTTP::Request::Common->use;
-  JSON::XS->use;
-};
+  JSON::MaybeXS->use;
+}
 use Data::Dumper;
 
 use Rex::Cloud::Base;
@@ -73,7 +78,7 @@ sub _do_request {
     die("Error on request.");
   }
 
-  my $json = JSON::XS->new;
+  my $json = JSON::MaybeXS->new;
   my $data = $json->decode( $res->decoded_content );
 
   Rex::Logger::debug( Dumper($data) );
@@ -154,11 +159,20 @@ sub run_instance {
     push( @jiffy_data, "metadata" => $data{"metadata"} );
   }
 
-  my $data = $self->_do_request( "POST", "jiffyBoxes", @jiffy_data );
+  my $data;
+  if ( exists $data{"clone_id"} ) {
+    $data =
+      $self->_do_request( "POST", "jiffyBoxes/" . $data{"clone_id"},
+      @jiffy_data );
+  }
+  else {
+    $data = $self->_do_request( "POST", "jiffyBoxes", @jiffy_data );
+  }
+
   my $instance_id = $data->{"result"}->{"id"};
 
   my $sleep_countdown = 10;
-  sleep $sleep_countdown;    # wait 10 seconds
+  sleep $sleep_countdown; # wait 10 seconds
 
   ($data) = grep { $_->{"id"} eq $instance_id } $self->list_instances();
   while ( $data->{"state"} ne "STOPPED" && $data->{"state"} ne "RUNNING" ) {
@@ -221,7 +235,7 @@ sub stop_instance {
   $self->_do_request( "PUT", "jiffyBoxes/$instance_id", status => "SHUTDOWN" );
 
   my $sleep_countdown = 10;
-  sleep $sleep_countdown;    # wait 10 seconds
+  sleep $sleep_countdown; # wait 10 seconds
 
   my ($data) = grep { $_->{"id"} eq $instance_id } $self->list_instances();
 

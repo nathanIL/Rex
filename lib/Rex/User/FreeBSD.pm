@@ -6,11 +6,13 @@
 
 package Rex::User::FreeBSD;
 
+use 5.010001;
 use strict;
 use warnings;
 
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Logger;
-use Rex::Commands::Run;
 use Rex::Commands::MD5;
 use Rex::Helper::Run;
 use Rex::Helper::Encode;
@@ -21,14 +23,14 @@ use Rex::Interface::Fs;
 use Rex::Interface::Exec;
 use Rex::User::Linux;
 use Rex::Helper::Path;
-use JSON::XS;
+use JSON::MaybeXS;
 
 use base qw(Rex::User::Linux);
 
 sub new {
   my $that  = shift;
   my $proto = ref($that) || $that;
-  my $self  = {@_};
+  my $self  = $proto->SUPER::new(@_);
 
   bless( $self, $proto );
 
@@ -74,7 +76,7 @@ sub create_user {
     $cmd .= " -d " . $data->{"home"};
   }
 
-  if ( $should_create_home && !defined $uid ) {    #useradd mode
+  if ( $should_create_home && !defined $uid ) { #useradd mode
     $cmd .= " -m ";
   }
 
@@ -102,16 +104,17 @@ sub create_user {
   $fh->write("$cmd -n $user\nexit \$?\n");
   $fh->close;
 
-  i_run "/bin/sh $rnd_file";
-  if ( $? == 0 ) {
+  i_run "/bin/sh $rnd_file", fail_ok => 1;
+  my $retval = $?;
+  Rex::Interface::Fs->create()->unlink($rnd_file);
+
+  if ( $retval == 0 ) {
     Rex::Logger::debug("User $user created/updated.");
   }
   else {
     Rex::Logger::info( "Error creating/updating user $user", "warn" );
     die("Error creating/updating user $user");
   }
-
-  Rex::Interface::Fs->create()->unlink($rnd_file);
 
   if ( exists $data->{password} ) {
     Rex::Logger::debug("Changing password of $user.");
@@ -123,12 +126,14 @@ sub create_user {
       "echo '" . $data->{password} . "' | pw usermod $user -h 0\nexit \$?\n" );
     $fh->close;
 
-    i_run "/bin/sh $rnd_file";
-    if ( $? != 0 ) {
+    i_run "/bin/sh $rnd_file", fail_ok => 1;
+    my $pw_retval = $?;
+    Rex::Interface::Fs->create()->unlink($rnd_file);
+
+    if ( $pw_retval != 0 ) {
       die("Error setting password for $user");
     }
 
-    Rex::Interface::Fs->create()->unlink($rnd_file);
   }
 
   my $new_pw_md5 = md5("/etc/passwd");
@@ -160,9 +165,12 @@ sub rm_user {
     $cmd .= " -r ";
   }
 
-  i_run $cmd . " -n " . $user;
-  if ( $? != 0 ) {
-    die("Error deleting user $user");
+  my $output = i_run $cmd . " -n " . $user, fail_ok => 1;
+  if ( $? == 67 ) {
+    Rex::Logger::info( "Cannot delete user $user (no such user)", "warn" );
+  }
+  elsif ( $? != 0 ) {
+    die("Error deleting user $user ($output)");
   }
 
 }
@@ -189,7 +197,7 @@ sub get_user {
   $fh->write( func_to_json() );
   $fh->close;
 
-  my $data_str = i_run "perl $rnd_file $user";
+  my $data_str = i_run "perl $rnd_file $user", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error getting  user information for $user");
   }
@@ -224,7 +232,7 @@ sub create_group {
       $cmd .= " -g " . $data->{gid};
     }
 
-    i_run $cmd . " -n " . $group;
+    i_run $cmd . " -n " . $group, fail_ok => 1;
     if ( $? != 0 ) {
       die("Error creating/modifying group $group");
     }
@@ -239,7 +247,7 @@ sub create_group {
     if ( exists $data->{gid} ) {
       eval {
         my @content = split( /\n/, cat("/etc/group") );
-        my $gid = $data->{gid};
+        my $gid     = $data->{gid};
         for (@content) {
           s/^$group:([^:]+):(\d+):/$group:$1:$gid:/;
         }
@@ -279,7 +287,7 @@ sub get_group {
   $fh->write( func_to_json() );
   $fh->close;
 
-  my $data_str = i_run "perl $rnd_file $group";
+  my $data_str = i_run "perl $rnd_file $group", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error getting group information");
   }
@@ -300,7 +308,7 @@ sub get_group {
 sub rm_group {
   my ( $self, $group ) = @_;
 
-  i_run "pw groupdel $group";
+  i_run "pw groupdel $group", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error deleting group $group");
   }

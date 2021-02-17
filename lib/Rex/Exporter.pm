@@ -6,14 +6,16 @@
 
 package Rex::Exporter;
 
+use 5.010001;
 use strict;
 use warnings;
+use Symbol;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Data::Dumper;
 
 our @EXPORT;
-
-no strict 'refs';
 
 sub import {
   my ( $mod_to_register, %option ) = @_;
@@ -28,16 +30,21 @@ sub import {
     $no_import = "," . join( ",", @{ $option{"-no"} } ) . ",";
   }
 
-  for my $reg_func ( @{ $_[0] . "::EXPORT" } ) {
+  my $ref_to_export       = qualify_to_ref( 'EXPORT', $mod_to_register );
+  my $ref_to_export_array = *{$ref_to_export}{ARRAY};
+
+  for my $reg_func ( @{$ref_to_export_array} ) {
     if ( $no_import =~ m/,$reg_func,/ ) {
       next;
     }
 
-    *{ $mod_to_register_in . "::" . $reg_func } =
-      *{ $mod_to_register . "::" . $reg_func };
+    my $ref_to_reg_func_in_source_mod =
+      qualify_to_ref( $reg_func, $mod_to_register );
+    my $ref_to_reg_func_in_target_mod =
+      qualify_to_ref( $reg_func, $mod_to_register_in );
+
+    *{$ref_to_reg_func_in_target_mod} = *{$ref_to_reg_func_in_source_mod};
   }
 }
-
-use strict;
 
 1;

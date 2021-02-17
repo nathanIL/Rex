@@ -6,8 +6,11 @@
 
 package Rex::Hardware::Network::FreeBSD;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::Run;
@@ -15,7 +18,7 @@ use Rex::Helper::Array;
 
 sub get_network_devices {
 
-  my @device_list = grep { $_ = $1 if /^([a-z0-9]+)\:/i } i_run "ifconfig -a";
+  my @device_list = map { /^([a-z0-9]+)\:/i } i_run "ifconfig -a";
 
   @device_list = array_uniq(@device_list);
   return \@device_list;
@@ -33,14 +36,14 @@ sub get_network_configuration {
     my $ifconfig = i_run("ifconfig $dev");
 
     $device_info->{$dev} = {
-      ip => [ ( $ifconfig =~ m/inet (\d+\.\d+\.\d+\.\d+)/ ) ]->[0],
+      ip      => [ ( $ifconfig =~ m/inet (\d+\.\d+\.\d+\.\d+)/ ) ]->[0],
       netmask => $ifconfig =~ m/(?:netmask 0x|netmask )([a-f0-9]+)/
       ? sprintf( "%d.%d.%d.%d", unpack "C4", pack "H*", $1 )
       : undef,
       broadcast => [ ( $ifconfig =~ m/broadcast (\d+\.\d+\.\d+\.\d+)/ ) ]->[0],
-      mac => [
+      mac       => [
         ( $ifconfig =~ m/(ether|address:|lladdr) (..?:..?:..?:..?:..?:..?)/ )
-        ]->[1],
+      ]->[1],
       is_bridge => 0,
     };
 
@@ -52,7 +55,7 @@ sub get_network_configuration {
 
 sub route {
 
-  my @route = i_run "netstat -nr";
+  my @route = i_run "netstat -nr", fail_ok => 1;
   my @ret;
   if ( $? != 0 ) {
     die("Error running netstat");
@@ -127,13 +130,13 @@ sub default_gateway {
 
   if ($new_default_gw) {
     if ( default_gateway() ) {
-      i_run "route del default";
+      i_run "route del default", fail_ok => 1;
       if ( $? != 0 ) {
         die("Error running route del default");
       }
     }
 
-    i_run "route add default $new_default_gw";
+    i_run "route add default $new_default_gw", fail_ok => 1;
     if ( $? != 0 ) {
       die("Error route add default");
     }
@@ -154,7 +157,7 @@ sub default_gateway {
 sub netstat {
 
   my @ret;
-  my @netstat = i_run "netstat -na";
+  my @netstat = i_run "netstat -na", fail_ok => 1;
 
   if ( $? != 0 ) {
     die("Error running netstat");

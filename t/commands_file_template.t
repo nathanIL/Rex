@@ -3,9 +3,9 @@
 use strict;
 use warnings;
 
-use Test::More;
+use Test::More tests => 4;
+
 use File::Basename;
-use File::Spec;
 
 use Rex::Commands::File;
 
@@ -14,9 +14,9 @@ my $basename = basename __FILE__;
 {
   # templates from file
   my $tpl =
-    File::Spec->catfile( dirname(__FILE__), 'commands', 'file', 'test.tpl', );
-  my $content = template $tpl,
-    basename => $basename;
+    Rex::Helper::File::Spec->catfile( dirname(__FILE__), 'commands', 'file',
+    'test.tpl', );
+  my $content = template $tpl, basename => $basename;
 
   is $content, $basename . "\n", "template from file";
 }
@@ -45,8 +45,6 @@ my $basename = basename __FILE__;
 
   is $content, $basename, "passing template content";
 }
-
-done_testing();
 
 __DATA__
 @first.tpl

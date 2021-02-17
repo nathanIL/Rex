@@ -6,11 +6,12 @@
 
 package Rex::Service::OpenBSD;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
-use Rex::Helper::Run;
+our $VERSION = '9999.99.99_99'; # VERSION
+
 use Rex::Commands::File;
 use Rex::Logger;
 
@@ -24,34 +25,17 @@ sub new {
   bless( $self, $proto );
 
   $self->{commands} = {
-    start   => '/etc/rc.d/%s start >/dev/null',
-    restart => '/etc/rc.d/%s restart >/dev/null',
-    stop    => '/etc/rc.d/%s stop >/dev/null',
-    reload  => '/etc/rc.d/%s reload >/dev/null',
-    status  => '/etc/rc.d/%s status >/dev/null',
-    action  => '/etc/rc.d/%s %s >/dev/null',
+    start        => '/usr/sbin/rcctl start %s',
+    restart      => '/usr/sbin/rcctl restart %s',
+    stop         => '/usr/sbin/rcctl stop %s',
+    reload       => '/usr/sbin/rcctl reload %s',
+    status       => '/usr/sbin/rcctl check %s',
+    ensure_start => '/usr/sbin/rcctl enable %s',
+    ensure_stop  => '/usr/sbin/rcctl disable %s',
+    action       => '/usr/sbin/rcctl action %s',
   };
 
   return $self;
-}
-
-sub ensure {
-  my ( $self, $service, $options ) = @_;
-
-  my $what = $options->{ensure};
-
-  if ( $what =~ /^stop/ ) {
-    $self->stop( $service, $options );
-    delete_lines_matching "/etc/rc.conf",
-      matching => qr/rc_scripts="\${rc_scripts} ${service}"/;
-  }
-  elsif ( $what =~ /^start/ || $what =~ m/^run/ ) {
-    $self->start( $service, $options );
-    append_if_no_such_line "/etc/rc.conf",
-      "rc_scripts=\"\${rc_scripts} ${service}\"\n";
-  }
-
-  return 1;
 }
 
 1;

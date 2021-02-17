@@ -6,8 +6,11 @@
 
 package Rex::Virtualization::VBox::import;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::Run;
@@ -21,6 +24,9 @@ sub execute {
 
   my $dom = $arg1;
   Rex::Logger::debug( "importing: $dom -> " . $opt{file} );
+
+  $opt{cpus}   ||= 1;
+  $opt{memory} ||= 512;
 
   my $add_cmd = "";
 
@@ -36,7 +42,7 @@ sub execute {
     . $opt{file}
     . "\" --vsys 0 --vmname \""
     . $dom
-    . "\" $add_cmd 2>&1";
+    . "\" $add_cmd 2>&1", fail_ok => 1;
 
   if ( $? != 0 ) {
     die("Error importing VM $opt{file}");

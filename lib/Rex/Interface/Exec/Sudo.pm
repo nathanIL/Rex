@@ -6,8 +6,11 @@
 
 package Rex::Interface::Exec::Sudo;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Config;
 use Rex::Interface::Exec::Local;
@@ -18,6 +21,8 @@ use Rex::Interface::File::SSH;
 
 use Rex::Commands;
 use Rex::Helper::Path;
+
+use base 'Rex::Interface::Exec::Base';
 
 sub new {
   my $that  = shift;
@@ -55,14 +60,15 @@ sub exec {
     $exec = Rex::Interface::Exec->create("Local");
     $file = Rex::Interface::File->create("Local");
   }
-  $shell = Rex::Interface::Shell->create("Sh");    # we're using sh for sudo
+  $shell = Rex::Interface::Shell->create("Sh"); # we're using sh for sudo
 
 ######## envs setzen. aber erst nachdem wir wissen ob wir sh forcen duerfen
   # if(exists $option->{env}) {
   #   $shell->set_environment($option->{env});
   # }
 
-  my $sudo_password = task->get_sudo_password;
+  my $sudo_password = (
+    defined task() ? task->get_sudo_password : Rex::Config->get_sudo_password );
   my $enc_pw;
   my $random_file = "";
 
@@ -70,7 +76,7 @@ sub exec {
 
   if ($sudo_password) {
     my $random_string = get_random( length($sudo_password), 'a' .. 'z' );
-    my $crypt = $sudo_password ^ $random_string;
+    my $crypt         = $sudo_password ^ $random_string;
 
     $random_file = get_tmp_file;
 
@@ -101,7 +107,9 @@ EOF
     $enc_pw = "";
   }
 
-  my $sudo_options     = Rex::get_current_connection()->{sudo_options};
+  #my $sudo_options     = Rex::get_current_connection()->{sudo_options};
+  my $sudo_options =
+    Rex::get_current_connection_object()->get_current_sudo_options;
   my $sudo_options_str = "";
   if ( exists $sudo_options->{user} ) {
     $sudo_options_str .= " -u " . $sudo_options->{user};
@@ -132,7 +140,7 @@ EOF
 
     # $option->{format_cmd} =
     #   "perl $random_file '$enc_pw' | sudo $sudo_options_str -p '' -S {{CMD}}";
-      $sudo_command = "perl $random_file '$enc_pw' | $sudo_command";
+      $sudo_command = "perl $random_file '$enc_pw' 2>/dev/null | $sudo_command";
     }
 
     # else {
@@ -174,7 +182,7 @@ EOF
 # $option->{_force_sh} = 1;
 
     if ($enc_pw) {
-      $sudo_command = "perl $random_file '$enc_pw' | $sudo_command";
+      $sudo_command = "perl $random_file '$enc_pw' 2>/dev/null | $sudo_command";
 
 # $option->{format_cmd} =
 #   "perl $random_file '$enc_pw' | sudo $sudo_options_str -p '' -S sh -c \"{{CMD}}\"";
@@ -192,6 +200,25 @@ EOF
   Rex::Logger::debug("sudo: exec: $real_exec");
 
   return $exec->direct_exec( $real_exec, $option );
+}
+
+sub _exec {
+  my ( $self, $cmd, $path, $option ) = @_;
+
+  my ( $exec, $file, $shell );
+  if ( my $ssh = Rex::is_ssh() ) {
+    if ( ref $ssh eq "Net::OpenSSH" ) {
+      $exec = Rex::Interface::Exec->create("OpenSSH");
+    }
+    else {
+      $exec = Rex::Interface::Exec->create("SSH");
+    }
+  }
+  else {
+    $exec = Rex::Interface::Exec->create("Local");
+  }
+
+  return $exec->_exec( $cmd, $option );
 }
 
 1;

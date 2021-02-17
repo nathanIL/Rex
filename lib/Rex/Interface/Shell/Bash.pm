@@ -6,12 +6,16 @@
 
 package Rex::Interface::Shell::Bash;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Interface::Shell::Base;
 use base qw(Rex::Interface::Shell::Base);
 use Data::Dumper;
+use Net::OpenSSH::ShellQuoter;
 
 sub new {
   my $class = shift;
@@ -73,7 +77,7 @@ sub exec {
     $complete_cmd = "cd $option->{cwd} && $complete_cmd";
   }
 
-  if ( $self->{path} ) {
+  if ( $self->{path} && !exists $self->{__env__}->{PATH} ) {
     $complete_cmd = "PATH=$self->{path}; export PATH; $complete_cmd ";
   }
 
@@ -82,7 +86,8 @@ sub exec {
   }
 
   if ( $self->{source_profile} ) {
-    $complete_cmd = ". ~/.profile >/dev/null 2>&1 ; $complete_cmd";
+    $complete_cmd =
+      "[ -r ~/.profile ] && . ~/.profile >/dev/null 2>&1 ; $complete_cmd";
   }
 
   if ( $self->{source_global_profile} ) {
@@ -121,15 +126,12 @@ sub exec {
 
   # rewrite the command again
   if ( exists $option->{format_cmd} ) {
-    $complete_cmd =~ s/{{CMD}}/$cmd/;
+    $complete_cmd =~ s/\{\{CMD\}\}/$cmd/;
   }
 
   if ( $self->{__inner_shell__} ) {
-    $complete_cmd =~ s/\\/\\\\/gms;
-    $complete_cmd =~ s/"/\\"/gms;
-    $complete_cmd =~ s/\$/\\\$/gms;
-
-    $complete_cmd = "sh -c \"$complete_cmd\"";
+    my $quoter = Net::OpenSSH::ShellQuoter->quoter("sh");
+    $complete_cmd = "sh -c " . $quoter->quote($complete_cmd);
   }
 
   if ( exists $option->{prepend_command} && $option->{prepend_command} ) {

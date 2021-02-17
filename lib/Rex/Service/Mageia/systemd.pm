@@ -6,12 +6,11 @@
 
 package Rex::Service::Mageia::systemd;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Rex::Commands::Run;
-use Rex::Logger;
-use Rex::Commands::Fs;
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Service::Redhat::systemd;
 use base qw(Rex::Service::Redhat::systemd);

@@ -6,23 +6,17 @@
 
 package Rex::Shared::Var::Array;
 
+use 5.010001;
 use strict;
 use warnings;
 
-use Fcntl qw(:DEFAULT :flock);
-use Data::Dumper;
+use Rex::Shared::Var::Common qw/__lock __store __retrieve/;
 
-use Storable;
-
-sub __lock(&);
-sub __retr;
-sub __store;
+our $VERSION = '9999.99.99_99'; # VERSION
 
 sub TIEARRAY {
   my $self = { varname => $_[1], };
-
   bless $self, $_[0];
-
 }
 
 sub STORE {
@@ -30,22 +24,21 @@ sub STORE {
   my $index = shift;
   my $value = shift;
 
-  return __lock {
-    my $ref = __retr;
+  return __lock sub {
+    my $ref = __retrieve;
     my $ret = $ref->{ $self->{varname} }->{data}->[$index] = $value;
     __store $ref;
 
     return $ret;
   };
-
 }
 
 sub FETCH {
   my $self  = shift;
   my $index = shift;
 
-  return __lock {
-    my $ref = __retr;
+  return __lock sub {
+    my $ref = __retrieve;
     my $ret = $ref->{ $self->{varname} }->{data}->[$index];
 
     return $ret;
@@ -55,43 +48,40 @@ sub FETCH {
 sub CLEAR {
   my $self = shift;
 
-  __lock {
-    my $ref = __retr;
+  __lock sub {
+    my $ref = __retrieve;
     $ref->{ $self->{varname} } = { data => [] };
     __store $ref;
   };
-
 }
 
 sub DELETE {
   my $self  = shift;
   my $index = shift;
 
-  __lock {
-    my $ref = __retr;
+  __lock sub {
+    my $ref = __retrieve;
     delete $ref->{ $self->{varname} }->{data}->[$index];
     __store $ref;
   };
-
 }
 
 sub EXISTS {
   my $self  = shift;
   my $index = shift;
 
-  return __lock {
-    my $ref = __retr;
+  return __lock sub {
+    my $ref = __retrieve;
     return exists $ref->{ $self->{varname} }->{data}->[$index];
   };
-
 }
 
 sub PUSH {
   my $self = shift;
   my @data = @_;
 
-  __lock {
-    my $ref = __retr;
+  __lock sub {
+    my $ref = __retrieve;
 
     if ( !ref( $ref->{ $self->{varname} }->{data} ) eq "ARRAY" ) {
       $ref->{ $self->{varname} }->{data} = [];
@@ -101,7 +91,55 @@ sub PUSH {
 
     __store $ref;
   };
+}
 
+sub UNSHIFT {
+  my $self = shift;
+  my @data = @_;
+
+  __lock sub {
+    my $ref = __retrieve;
+
+    if ( !ref( $ref->{ $self->{varname} }->{data} ) eq "ARRAY" ) {
+      $ref->{ $self->{varname} }->{data} = [];
+    }
+
+    unshift( @{ $ref->{ $self->{varname} }->{data} }, @data );
+
+    __store $ref;
+  };
+}
+
+sub SHIFT {
+  my $self = shift;
+  my @data = @_;
+  my $result;
+
+  __lock sub {
+    my $ref = __retrieve;
+
+    $result = shift( @{ $ref->{ $self->{varname} }->{data} } );
+
+    __store $ref;
+  };
+
+  return $result;
+}
+
+sub POP {
+  my $self = shift;
+  my @data = @_;
+  my $result;
+
+  __lock sub {
+    my $ref = __retrieve;
+
+    $result = pop( @{ $ref->{ $self->{varname} }->{data} } );
+
+    __store $ref;
+  };
+
+  return $result;
 }
 
 sub EXTEND {
@@ -117,45 +155,13 @@ sub STORESIZE {
 sub FETCHSIZE {
   my $self = shift;
 
-  return __lock {
-    my $ref = __retr;
+  return __lock sub {
+    my $ref = __retrieve;
     if ( !exists $ref->{ $self->{varname} } ) {
       return 0;
     }
     return scalar( @{ $ref->{ $self->{varname} }->{data} } );
   };
-
-}
-
-sub DESTROY {
-  my $self = shift;
-}
-
-sub __lock(&) {
-
-  sysopen( my $dblock, "vars.db.lock", O_RDONLY | O_CREAT ) or die($!);
-  flock( $dblock, LOCK_SH ) or die($!);
-
-  my $ret = &{ $_[0] }();
-
-  close($dblock);
-
-  return $ret;
-}
-
-sub __store {
-  my $ref = shift;
-  store( $ref, "vars.db" );
-}
-
-sub __retr {
-
-  if ( !-f "vars.db" ) {
-    return {};
-  }
-
-  return retrieve("vars.db");
-
 }
 
 1;

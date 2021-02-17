@@ -6,8 +6,11 @@
 
 package Rex::Virtualization::VBox::shutdown;
 
+use 5.010001;
 use strict;
 use warnings;
+
+our $VERSION = '9999.99.99_99'; # VERSION
 
 use Rex::Logger;
 use Rex::Helper::Run;
@@ -26,7 +29,7 @@ sub execute {
     die("VM $dom not found.");
   }
 
-  i_run "VBoxManage controlvm \"$dom\" acpipowerbutton";
+  i_run "VBoxManage controlvm \"$dom\" acpipowerbutton", fail_ok => 1;
   if ( $? != 0 ) {
     die("Error shutdown vm $dom");
   }
